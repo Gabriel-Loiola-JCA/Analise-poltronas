@@ -66,7 +66,13 @@ Tudo é gravado em `localStorage` e vale para os próximos estudos.
 - **Referência `mínimo → máximo`** estica a escala entre o pior e o melhor valor do recorte, em vez de partir do zero.
 - **Referência `posição no ranking`** ignora a distância entre os valores e distribui as cores pela ordem — a diferença visual fica sempre visível, mesmo que a diferença real seja pequena.
 
-A **sensibilidade** aplica uma curva por cima de qualquer uma das três. Vale lembrar do custo: quanto mais se estica a escala, mais uma diferença irrelevante parece grande. Para decidir preço, olhe o número na tabela, não só a cor.
+A **sensibilidade** aplica uma curva por cima de qualquer uma das três, e está também na barra do mapa — o painel de Ajustes abre como gaveta lateral justamente para o mapa continuar à vista enquanto você regula.
+
+A curva é uma sigmoide centrada na **mediana** do recorte, não em 50%. A diferença importa: numa operação onde toda poltrona vende bem, os valores se amontoam perto do topo, e uma curva centrada no meio jogaria todos eles para a cor cheia — reproduzindo o mapa monocromático que se queria evitar. Centrada na mediana, ela gasta a escala inteira separando o que de fato existe.
+
+Vale lembrar do custo: quanto mais se estica a escala, mais uma diferença irrelevante parece grande. Para decidir preço, olhe o número na tabela, não só a cor.
+
+**Só o top 5**, na barra do mapa, recua as demais poltronas em vez de escondê-las — a referência de onde elas ficam no salão se mantém.
 
 ## Dados
 
@@ -76,9 +82,13 @@ O CSV precisa de **poltrona**, **data da venda** e algo que identifique a **viag
 
 Todo arquivo analisado entra no histórico automaticamente, e o painel pede um nome logo em seguida. Os estudos ficam em IndexedDB, no próprio navegador.
 
+Por isso fechar a guia no meio de um estudo não custa o trabalho feito: ao voltar, o painel oferece o último estudo de volta. Ele não reabre nada sozinho — quem volta pode muito bem querer começar outro.
+
 ## Simulação
 
 Dois modos: **percentual** sobre o preço médio pago, ou **valor fixo em reais** somado a cada bilhete. Em ambos, o painel mostra o ganho no recorte, a projeção em 1, 6 e 12 meses e a **margem de segurança** — quanto da venda a operação suporta perder antes de empatar com a receita de hoje.
+
+O **cenário de demanda** é a única premissa que não sai dos dados. Não há teste A/B num histórico de vendas, então quantas pessoas desistiriam por causa do aumento é um palpite — e o painel o mantém explícito, traduzido em bilhetes: *"de cada 100 pessoas que compram hoje, 93 continuariam comprando; as outras 7 procurariam outro horário, outra poltrona ou outra empresa"*. Otimista (100%) é o teto do que se pode esperar, útil como limite e não como meta. Quando a perda estimada passa do ponto de equilíbrio, o painel diz que o aumento sairia no vermelho em vez de maquiar o número.
 
 O bloco **Recomendação**, na visão executiva, traduz isso em uma frase e sugere as três poltronas com melhor índice de oportunidade.
 

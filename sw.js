@@ -4,7 +4,7 @@
    Suba a versão do cache a cada deploy — o SW limpa os antigos
    sozinho no evento activate.
    ══════════════════════════════════════════════════════════════ */
-const VERSION = 'v5.1.0';
+const VERSION = 'v5.4.0';
 const CACHE = `poltronas-${VERSION}`;
 const ASSETS = [
   './',

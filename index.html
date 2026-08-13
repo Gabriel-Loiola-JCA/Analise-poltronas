@@ -37,17 +37,21 @@
   <symbol id="s-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 5 8.9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9.5a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
   <symbol id="s-swap" viewBox="0 0 24 24"><path d="M7 4v13M4 14l3 3 3-3M17 20V7M14 10l3-3 3 3"/></symbol>
   <symbol id="s-drop" viewBox="0 0 24 24"><path d="M12 2.7 6.5 9.4a7 7 0 1 0 11 0z"/></symbol>
+  <symbol id="s-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/></symbol>
+  <symbol id="s-play" viewBox="0 0 24 24"><path d="M6 4.5v15l13-7.5z"/></symbol>
 </svg>
 
 <header class="top">
   <div class="wrap">
-    <span class="brand">Estudo de Poltronas <small id="hstatus">· pronto</small></span>
+    <span class="brand">Estudo de Poltronas</span>
     <div class="hactions">
       <button class="gh dash" id="btnSim" type="button" title="Simular valores"><svg><use href="#s-sim"/></svg><span class="full">Simular</span></button>
       <button class="gh dash" id="btnSave" type="button" title="Renomear ou salvar de novo"><svg><use href="#s-save"/></svg><span class="full">Salvar</span></button>
       <button class="gh" id="btnHist" type="button" title="Histórico"><svg><use href="#s-hist"/></svg><span class="full">Histórico</span></button>
       <button class="gh dash" id="btnExport" type="button" title="Exportar relatório" aria-haspopup="true" aria-expanded="false"><svg><use href="#s-dn"/></svg><span class="full">Exportar</span></button>
       <button class="gh dash" id="btnReset" type="button" title="Nova análise"><svg><use href="#s-refresh"/></svg><span class="full">Nova</span></button>
+    </div>
+    <div class="hutil">
       <button class="gh icon" id="btnCfg" type="button" aria-label="Ajustes" title="Ajustes"><svg><use href="#s-cog"/></svg></button>
       <button class="gh icon" id="btnTheme" type="button" aria-label="Alternar tema"><svg id="themeIcon"><use href="#s-sun"/></svg></button>
     </div>
@@ -78,6 +82,16 @@
     </div>
   </div>
   <div>
+    <div class="resume" id="resume" hidden>
+      <div class="rzhead"><span class="lbl">Onde você parou</span>
+        <button class="rzx" id="resumeDismiss" type="button" aria-label="Dispensar"><svg><use href="#s-x"/></svg></button></div>
+      <b id="resumeName">—</b>
+      <small id="resumeMeta">—</small>
+      <div class="rzacts">
+        <button class="gh solid" id="resumeGo" type="button"><svg><use href="#s-play"/></svg>Continuar este estudo</button>
+        <button class="linkish" id="resumeAll" type="button">Ver todos no histórico</button>
+      </div>
+    </div>
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Selecionar CSV">
       <svg class="big"><use href="#s-up"/></svg>
       <span class="lbl" style="color:var(--acc)">Arquivo de vendas</span>
@@ -109,15 +123,20 @@
       <div class="deckbtns"><button class="gh" id="btnMore" type="button">+ Filtros</button><button class="gh solid" id="btnApply" type="button">Aplicar</button></div>
     </div>
     <div class="deckrow more" id="moreRow" hidden>
+      <div class="fld"><label for="fMarket">Mercado</label><select id="fMarket"></select></div>
+      <div class="fld"><label for="fLine">Linha</label><select id="fLine"></select></div>
+      <div class="fld"><label for="fOrigin">Origem</label><select id="fOrigin"></select></div>
+      <div class="fld"><label for="fDest">Destino</label><select id="fDest"></select></div>
+      <div class="fld"><label for="fRoute">Trecho (origem → destino)</label><select id="fRoute"></select></div>
       <div class="fld"><label for="fService">Serviço</label><select id="fService"></select></div>
-      <div class="fld"><label for="fChannel">Canal de venda</label><select id="fChannel"></select></div>
       <div class="fld"><label for="fClass">Classe</label><select id="fClass"></select></div>
+      <div class="fld"><label for="fChannel">Canal de venda</label><select id="fChannel"></select></div>
       <div class="fld"><label for="fWeek">Dia da semana</label><select id="fWeek"></select></div>
-      <div class="fld"><label for="fRoute">Trecho</label><select id="fRoute"></select></div>
       <div class="fld"><label for="fOcc">Ocupação mínima da viagem</label><select id="fOcc"></select></div>
       <div class="fld"><label for="fLead">Janela de antecedência</label><select id="fLead"></select></div>
       <div class="deckbtns"><button class="gh" id="btnClear" type="button">Limpar filtros</button></div>
     </div>
+    <div class="chipsrow" id="activeFilters" hidden></div>
   </div>
 
   <section id="secResumo">
@@ -174,7 +193,14 @@
             <span class="sep" data-fixed></span>
             <button class="tool" id="btnInvert" type="button" data-fixed aria-pressed="false"
               title="Inverter a escala: quem vende mais fica quase transparente"><svg><use href="#s-swap"/></svg>Inverter</button>
+            <button class="tool" id="btnOnlyTop" type="button" data-fixed aria-pressed="false"
+              title="Destacar apenas as cinco poltronas do ranking ativo"><svg><use href="#s-star"/></svg>Só o top 5</button>
             <button class="tool" id="btnMapCfg" type="button" data-fixed title="Ajustes do mapa de calor"><svg><use href="#s-cog"/></svg></button>
+          </div>
+          <div class="sensbar" id="sensBar">
+            <label for="mapSens">Sensibilidade</label>
+            <input id="mapSens" type="range" min="0" max="100" step="1" value="45" aria-label="Sensibilidade da escala">
+            <span class="pill" id="mapSensTxt">média</span>
           </div>
         </div>
         <div class="orient"><span>Frente</span><span id="orientTop">—</span><span>Fundo</span></div>
@@ -327,6 +353,7 @@
               <button class="chip" data-ret="93" type="button">Base</button>
               <button class="chip on" data-ret="100" type="button">Otimista</button>
             </div>
+            <p class="scenexp" id="simScenExp">—</p>
           </div>
           <div class="box">
             <span class="lbl">Período</span>
@@ -394,24 +421,22 @@
 </dialog>
 
 <!-- ══════ AJUSTES ══════ -->
-<dialog class="md" id="dlgCfg" style="width:min(760px,calc(100% - 24px))" aria-labelledby="cfgTitle">
+<dialog class="md drawer" id="dlgCfg" aria-labelledby="cfgTitle">
   <div class="mdshell">
     <div class="mdhead">
       <div><span class="lbl">Preferências</span><h2 id="cfgTitle">Ajustes do <b>painel</b></h2>
-        <p>Ficam guardados neste navegador e valem para os próximos estudos.</p></div>
+        <p>O mapa fica à vista: mexa nos controles e veja o efeito na hora.</p></div>
       <button class="mdx" data-close="dlgCfg" type="button" aria-label="Fechar"><svg><use href="#s-x"/></svg></button>
     </div>
     <div class="mdbody">
       <div class="cfg">
 
         <section class="cfgbox">
-          <span class="lbl">Mapa de calor</span>
-          <p>A cor do painel é neutra de propósito: quem carrega significado é o mapa. Escolha aqui a escala.</p>
+          <span class="lbl">Escala de cor</span>
           <div class="palgrid" id="cfgPal"></div>
 
-          <div class="cfgrow" style="margin-top:14px">
-            <div><b>Misturar duas cores</b>
-              <small>Em vez de uma escala pronta, monte o degradê com as duas cores que você escolher.</small></div>
+          <div class="cfgrow" style="margin-top:12px">
+            <div><b>Misturar duas cores</b><small>Degradê montado com as suas cores.</small></div>
             <button class="tog" id="cfgDuo" type="button" role="switch" aria-pressed="false" aria-label="Misturar duas cores"></button>
           </div>
           <div class="duorow" id="cfgDuoRow" hidden>
@@ -426,33 +451,29 @@
         </section>
 
         <section class="cfgbox">
-          <span class="lbl">Escala</span>
-          <div class="cfgrow">
-            <div><b>Inverter a intensidade</b>
-              <small>Normal: quem vende mais recebe a cor cheia. Invertido: quem vende mais fica quase transparente e
-                a atenção vai para as poltronas fracas.</small></div>
-            <button class="tog" id="cfgInvert" type="button" role="switch" aria-pressed="false" aria-label="Inverter escala"></button>
-          </div>
+          <span class="lbl">Leitura da escala</span>
 
           <div class="cfgrow col">
             <div><b>Sensibilidade <span class="pill" id="cfgSensTxt">média</span></b>
-              <small id="cfgSensHint">Quanto maior, mais a cor muda entre poltronas com valores próximos.</small></div>
+              <small id="cfgSensHint">Separa poltronas de valores próximos.</small></div>
             <input id="cfgSens" type="range" min="0" max="100" step="1" value="45" aria-label="Sensibilidade">
           </div>
 
           <div class="cfgrow col">
-            <div><b>Referência da escala</b>
-              <small id="cfgSpanHint">—</small></div>
+            <div><b>Referência</b><small id="cfgSpanHint">—</small></div>
             <div class="segs" id="cfgSpan" role="group" aria-label="Referência da escala">
-              <button type="button" data-span="zero" class="on">0 → máximo</button>
-              <button type="button" data-span="minmax">mínimo → máximo</button>
-              <button type="button" data-span="rank">posição no ranking</button>
+              <button type="button" data-span="zero" class="on">0 → máx.</button>
+              <button type="button" data-span="minmax">mín. → máx.</button>
+              <button type="button" data-span="rank">ranking</button>
             </div>
           </div>
 
           <div class="cfgrow">
-            <div><b>Marcar o top 5 no mapa</b>
-              <small>Contorno neutro em volta das cinco poltronas do ranking ativo.</small></div>
+            <div><b>Inverter</b><small>A cor cheia marca quem vende menos.</small></div>
+            <button class="tog" id="cfgInvert" type="button" role="switch" aria-pressed="false" aria-label="Inverter escala"></button>
+          </div>
+          <div class="cfgrow">
+            <div><b>Marcar o top 5</b><small>Contorno nas cinco do ranking ativo.</small></div>
             <button class="tog" id="cfgTop5" type="button" role="switch" aria-pressed="true" aria-label="Marcar top 5"></button>
           </div>
         </section>
@@ -460,30 +481,27 @@
         <section class="cfgbox">
           <span class="lbl">Interface</span>
           <div class="cfgrow">
-            <div><b>Tingir a interface com a paleta</b>
-              <small>Desligado, o site fica em preto, branco e grafite. Ligado, botões, barras e destaques adotam a cor do mapa.</small></div>
-            <button class="tog" id="cfgTint" type="button" role="switch" aria-pressed="false" aria-label="Tingir a interface"></button>
-          </div>
-          <div class="cfgrow">
-            <div><b>Tema claro</b><small>Também respeita o botão de sol/lua no cabeçalho.</small></div>
+            <div><b>Tema claro</b></div>
             <button class="tog" id="cfgLight" type="button" role="switch" aria-pressed="false" aria-label="Tema claro"></button>
           </div>
           <div class="cfgrow">
-            <div><b>Brilho de fundo</b><small>Halo suave atrás do conteúdo. Desligue para leitura e impressão mais secas.</small></div>
+            <div><b>Tingir com a paleta</b><small>Fora daqui, o site é preto, branco e grafite.</small></div>
+            <button class="tog" id="cfgTint" type="button" role="switch" aria-pressed="false" aria-label="Tingir a interface"></button>
+          </div>
+          <div class="cfgrow">
+            <div><b>Brilho de fundo</b></div>
             <button class="tog" id="cfgGlow" type="button" role="switch" aria-pressed="true" aria-label="Brilho de fundo"></button>
+          </div>
+          <div class="cfgrow">
+            <div><b>Cor no PDF</b><small>Desligado, sai em escala de cinza.</small></div>
+            <button class="tog" id="cfgPdfColor" type="button" role="switch" aria-pressed="true" aria-label="Cor no PDF"></button>
           </div>
         </section>
 
         <section class="cfgbox">
-          <span class="lbl">Exportações</span>
           <div class="cfgrow">
-            <div><b>Usar a paleta do mapa no PDF</b>
-              <small>Desligado, o PDF sai em escala de cinza — melhor para impressão em preto e branco.</small></div>
-            <button class="tog" id="cfgPdfColor" type="button" role="switch" aria-pressed="true" aria-label="Cor no PDF"></button>
-          </div>
-          <div class="cfgrow">
-            <div><b>Dados guardados</b><small id="cfgStorage">—</small></div>
-            <button class="gh" id="cfgClear" type="button">Limpar preferências</button>
+            <div><small id="cfgStorage">—</small></div>
+            <button class="gh" id="cfgClear" type="button">Limpar</button>
           </div>
         </section>
 

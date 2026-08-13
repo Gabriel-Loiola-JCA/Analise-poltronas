@@ -21,7 +21,7 @@ const st = { ds: null, an: null, metric: 'volume', rank: 'advance', seat: null, 
   pal: 'verde', sort: { k: 'avgPct', asc: true }, sim: null, hist: [],
   /* preferências visuais — ver dlgCfg */
   inv: false, top5: true, tint: false, glow: true, pdfColor: true,
-  sens: 45, span: 'zero', duo: false, duoA: '#123f2a', duoB: '#84e79c' };
+  sens: 45, span: 'zero', duo: false, duoA: '#123f2a', duoB: '#84e79c', onlyTop: false };
 
 /* ══════════════════════════════════════════════════════════════
    PALETAS DO MAPA DE CALOR
@@ -74,14 +74,22 @@ function hex(h) { let x = String(h).replace('#', ''); if (x.length === 3) x = x.
    meio — sensibilidade alta empurra valores baixos para baixo e altos
    para cima, ampliando a diferença visual entre vizinhos.
    0 = escala linear crua; 100 = separação máxima. */
-function curve(t) {
+/* Ponto em que a curva é mais íngreme. Precisa ser a MEDIANA dos
+   valores do recorte, não 0,5 fixo: numa operação onde toda poltrona
+   vende bem, os valores se amontoam perto do topo, e uma sigmoide
+   centrada no meio jogaria todos eles para a cor cheia — que é
+   exatamente o mapa monocromático que se quer evitar. Centrada na
+   mediana, a curva gasta a escala inteira separando o que existe. */
+const SCALE = { pivot: 0.5 };
+function curve(t, pivot) {
   const s = Math.max(0, Math.min(100, st.sens)) / 100;
   if (s <= 0.02) return t;
+  const c = pivot == null ? SCALE.pivot : pivot;
   /* a inclinação cresce em cubo: a metade de baixo do controle regula
      fino, e a de cima chega a um degrau quase binário — que é o que
      serve quando a diferença real entre as poltronas é mínima */
   const k = 1 + s * 6 + s * s * s * 34;
-  const f = x => 1 / (1 + Math.exp(-k * (x - 0.5)));
+  const f = x => 1 / (1 + Math.exp(-k * (x - c)));
   const lo = f(0), hi = f(1);                /* normaliza para [0,1] */
   const sig = (f(t) - lo) / (hi - lo || 1);
   /* a mistura com a linear também some no topo, para o extremo valer */
@@ -122,7 +130,7 @@ const INFO = {
   chartScatter: ['Cobertura × precocidade', 'Horizontal: em quantas viagens vendeu. Vertical: quão cedo sai na fila. O quadrante superior direito reúne as candidatas fortes.', ''],
   sim: ['Simulação de valores', 'Aplica um aumento percentual sobre a receita observada das poltronas escolhidas e mostra o ganho no período, por viagem e projetado em 12 meses — com a perda de vendas que o aumento suportaria.', 'nova receita = receita × (1 + aumento) × retenção'],
   simRank: ['Critério do top', 'Define quais poltronas entram no cenário: as de maior receita, as que vendem primeiro, as de maior antecedência ou as de maior índice.', ''],
-  simRet: ['Retenção de demanda', 'Quanto da demanda atual permanece após o aumento. 100% é o cenário otimista (ninguém desiste). Como não há teste A/B nos dados, esse número é uma premissa sua — por isso ele fica explícito.', 'retenção = vendas após o aumento ÷ vendas atuais']
+  simRet: ['Cenário de demanda', 'Quantas das vendas de hoje sobreviveriam ao aumento. Exemplo: 100 pessoas compram a poltrona 19 por mês; com retenção de 93%, 93 continuariam comprando pelo preço novo e 7 procurariam outro horário, outra poltrona ou outra empresa. Otimista (100%) assume que ninguém desiste — é o teto do que se pode esperar, útil como limite, não como meta. Base (93%) e Conservador (85%) são pontos de partida razoáveis para discutir. Este número não sai dos dados: não há teste A/B no histórico de vendas, então ele é uma premissa sua — e fica explícito justamente por isso.', 'retenção = vendas após o aumento ÷ vendas atuais']
 };
 const tip = $('#tip'); let tipOwner = null;
 function showTip(el) {
@@ -256,10 +264,9 @@ function buildCfgPal() {
   host.innerHTML = Object.entries(PALS).map(([k, v]) => {
     const sp = v[dark() ? 'dark' : 'light'];
     const g = st.inv ? [...sp].reverse() : sp;
-    return `<button class="palcard${!st.duo && k === st.pal ? ' on' : ''}" type="button" data-pal="${k}">
+    return `<button class="palcard${!st.duo && k === st.pal ? ' on' : ''}" type="button" data-pal="${k}" title="${esc(v.hint)}">
       <i class="swatch" style="background:linear-gradient(90deg,${g.join(',')})"></i>
       <span>${esc(v.name)}<em>${!st.duo && k === st.pal ? 'em uso' : ''}</em></span>
-      <em style="font-weight:500">${esc(v.hint)}</em>
     </button>`;
   }).join('');
 }
@@ -287,8 +294,9 @@ function syncCfg() {
   set('#cfgInvert', st.inv); set('#cfgTop5', st.top5);
   set('#cfgTint', st.tint); set('#cfgLight', !dark()); set('#cfgGlow', st.glow);
   set('#cfgPdfColor', st.pdfColor); set('#cfgDuo', st.duo);
-  $('#cfgSens').value = st.sens;
+  $('#cfgSens').value = st.sens; $('#mapSens').value = st.sens;
   $('#cfgSensTxt').textContent = SENS_TXT(st.sens);
+  $('#mapSensTxt').textContent = SENS_TXT(st.sens);
   $('#cfgSpanHint').textContent = SPAN_TXT[st.span];
   $$('#cfgSpan button').forEach(b => b.classList.toggle('on', b.dataset.span === st.span));
   $('#cfgDuoRow').hidden = !st.duo;
@@ -298,21 +306,61 @@ function syncCfg() {
   if (s) s.textContent = `${st.hist.length} ${pl(st.hist.length, 'estudo salvo', 'estudos salvos')} neste navegador · preferências em localStorage.`;
   buildCfgPal(); renderCfgPreview();
 }
-function openCfg() { syncCfg(); $('#dlgCfg').showModal(); }
+/* A gaveta abre com show(), não showModal(): sem backdrop bloqueando,
+   o mapa continua interativo e visível enquanto os controles mudam.
+   Com um estudo aberto, rolamos até o mapa para o efeito ficar à vista. */
+function openCfg() {
+  const d = $('#dlgCfg');
+  if (d.open) return closeCfg();
+  syncCfg();
+  d.classList.remove('closing');
+  d.show();
+  document.body.classList.add('drawer-open');
+  if (st.an) setTimeout(() => $('#secMapa').scrollIntoView({ behavior: 'smooth', block: 'start' }), 90);
+}
+function closeCfg() {
+  const d = $('#dlgCfg');
+  if (!d.open) return;
+  d.classList.add('closing');
+  document.body.classList.remove('drawer-open');
+  setTimeout(() => { d.close(); d.classList.remove('closing'); }, 250);
+}
 $('#btnCfg').addEventListener('click', openCfg);
 $('#btnMapCfg').addEventListener('click', openCfg);
+$('#dlgCfg').addEventListener('cancel', e => { e.preventDefault(); closeCfg(); });
 $('#btnInvert').addEventListener('click', () => setInvert(!st.inv));
+/* recorte visual do top 5: as demais poltronas recuam em vez de sumir,
+   para não se perder a referência de onde elas ficam no salão */
+$('#btnOnlyTop').addEventListener('click', () => {
+  st.onlyTop = !st.onlyTop;
+  const b = $('#btnOnlyTop');
+  b.classList.toggle('on', st.onlyTop);
+  b.setAttribute('aria-pressed', String(st.onlyTop));
+  $('#seatGrid').classList.toggle('onlytop', st.onlyTop);
+  if (st.onlyTop && st.an) {
+    const t = activeTop();
+    if (t[0]) { st.seat = t[0].seat; paintSeats(); }
+  }
+});
 $('#cfgPal').addEventListener('click', e => {
   const b = e.target.closest('[data-pal]'); if (b) { setPal(b.dataset.pal); buildCfgPal(); syncPalUI(); }
 });
 $('#cfgInvert').addEventListener('click', () => { setInvert(!st.inv); syncCfg(); });
-/* sensibilidade: repinta a cada frame enquanto arrasta, grava só ao soltar */
-$('#cfgSens').addEventListener('input', e => {
-  st.sens = Number(e.target.value);
-  $('#cfgSensTxt').textContent = SENS_TXT(st.sens);
-  repaint();
-});
-$('#cfgSens').addEventListener('change', () => { DB.setPref('sensibilidade', st.sens); repaintAll(); });
+/* sensibilidade: repinta a cada frame enquanto arrasta, grava só ao soltar.
+   Os dois controles (gaveta e barra do mapa) espelham um ao outro. */
+function setSens(v, done) {
+  st.sens = Number(v);
+  const txt = SENS_TXT(st.sens);
+  $('#cfgSensTxt').textContent = txt; $('#mapSensTxt').textContent = txt;
+  if ($('#cfgSens').value != st.sens) $('#cfgSens').value = st.sens;
+  if ($('#mapSens').value != st.sens) $('#mapSens').value = st.sens;
+  if (done) { DB.setPref('sensibilidade', st.sens); repaintAll(); }
+  else repaint();
+}
+$('#cfgSens').addEventListener('input', e => setSens(e.target.value));
+$('#cfgSens').addEventListener('change', e => setSens(e.target.value, true));
+$('#mapSens').addEventListener('input', e => setSens(e.target.value));
+$('#mapSens').addEventListener('change', e => setSens(e.target.value, true));
 $('#cfgSpan').addEventListener('click', e => {
   const b = e.target.closest('[data-span]'); if (!b) return;
   st.span = b.dataset.span; DB.setPref('referencia', st.span);
@@ -483,7 +531,7 @@ async function handle(files) {
     /* 3 · cálculo */
     phase('Calculando as métricas…', 'Ordem de compra, antecedência e cobertura');
     prog(.82); await pause(280);
-    st.layout = ''; st.sim = null;
+    st.layout = ''; st.layoutManual = false; st.sim = null;
     run(true);
 
     /* 4 · desenho */
@@ -499,14 +547,20 @@ async function handle(files) {
   finally { $('#file').value = ''; }
 }
 
+/* A planta só é imposta quando o usuário a escolheu à mão. Caso
+   contrário vai nula, e o motor a redetecta a partir do recorte —
+   é o que permite filtrar por uma classe de veículo diferente sem
+   o mapa esvaziar. */
 function opts(reset) {
-  if (reset) return { layout: st.layout || null };
+  if (reset) return { layout: st.layoutManual ? st.layout : null };
   return {
-    layout: st.layout || null,
+    layout: st.layoutManual ? st.layout : null,
     start: $('#from').value || null, end: $('#to').value || null,
     minTrips: Math.max(1, Number($('#minN').value) || 1),
     service: $('#fService').value || null, channel: $('#fChannel').value || null,
     klass: $('#fClass').value || null, route: $('#fRoute').value || null,
+    market: $('#fMarket').value || null, line: $('#fLine').value || null,
+    origin: $('#fOrigin').value || null, destination: $('#fDest').value || null,
     dow: $('#fWeek').value === '' ? null : Number($('#fWeek').value),
     minOcc: Number($('#fOcc').value) || 0, lead: $('#fLead').value || 'all'
   };
@@ -514,17 +568,20 @@ function opts(reset) {
 function run(reset) {
   const an = S.analyze(st.ds, opts(reset));
   st.an = an;
-  if (!st.layout) st.layout = an.layout;
+  st.layout = an.layout;   /* acompanha o que foi detectado no recorte */
   $('#enter').hidden = true; $('#dash').hidden = false;
+  $('#resume').hidden = true;
   syncActions();
-  $('#hstatus').textContent = '· ' + (an.sourceName || '');
+  /* o nome da base vive no deck de filtros, não no cabeçalho */
+  document.title = `${an.sourceName || 'Estudo'} · Estudo de Poltronas`;
   if (reset) {
     $('#from').value = an.period.start || ''; $('#to').value = an.period.end || '';
     $('#from').min = $('#to').min = an.period.start || '';
     $('#from').max = $('#to').max = an.period.end || '';
     $('#minN').value = an.minN;
-    fillLayouts(); fillFacets();
+    fillFacets();
   }
+  fillLayouts();   /* a planta pode ter mudado com o recorte */
   const t = activeTop();
   st.seat = t[0] ? t[0].seat : ((an.seats.find(s => s.appear) || an.seats[0]).seat);
   renderAll();
@@ -534,15 +591,30 @@ function fillLayouts() {
   $('#layout').innerHTML = Object.values(S.LAYOUTS).map(l =>
     `<option value="${l.id}"${l.id === st.layout ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
 }
+/* Cada select é montado a partir das facetas contadas na importação,
+   ordenadas por volume — numa base grande, o que interessa vem antes.
+   Campos com um único valor são escondidos: filtrar por eles não
+   mudaria nada e só ocupariam espaço. */
 function fillFacets() {
   const f = st.ds.facets || {};
   const opt = (o, lbl, fmt) => `<option value="">${lbl}</option>` + Object.entries(o || {})
-    .sort((a, b) => b[1] - a[1]).filter(([k]) => k).slice(0, 200)
+    .sort((a, b) => b[1] - a[1]).filter(([k]) => k).slice(0, 500)
     .map(([k, n]) => `<option value="${esc(k)}">${esc(fmt ? fmt(k) : k)} (${int(n)})</option>`).join('');
-  $('#fService').innerHTML = opt(f.services, 'Todos os serviços');
-  $('#fChannel').innerHTML = opt(f.channels, 'Todos os canais');
-  $('#fClass').innerHTML = opt(f.classes, 'Todas as classes');
-  $('#fRoute').innerHTML = opt(f.routes, 'Todos os trechos');
+  const nOf = o => Object.keys(o || {}).filter(Boolean).length;
+  const put = (id, facet, lbl) => {
+    const el = $('#' + id); if (!el) return;
+    el.innerHTML = opt(facet, lbl);
+    const fld = el.closest('.fld');
+    if (fld) fld.hidden = nOf(facet) < 2;   /* um valor só não é filtro */
+  };
+  put('fMarket', f.markets, 'Todos os mercados');
+  put('fLine', f.lines, 'Todas as linhas');
+  put('fOrigin', f.origins, 'Todas as origens');
+  put('fDest', f.destinations, 'Todos os destinos');
+  put('fService', f.services, 'Todos os serviços');
+  put('fChannel', f.channels, 'Todos os canais');
+  put('fClass', f.classes, 'Todas as classes');
+  put('fRoute', f.routes, 'Todos os trechos');
   $('#fWeek').innerHTML = '<option value="">Todos os dias</option>' + DOW.map((d, i) => `<option value="${i}">${d}</option>`).join('');
   $('#fOcc').innerHTML = '<option value="0">Qualquer ocupação</option>' + [5, 10, 15, 20, 30].map(n => `<option value="${n}">a partir de ${n} poltronas</option>`).join('');
   $('#fLead').innerHTML = '<option value="all">Todas as compras</option><option value="w0">até 3 dias antes</option>' +
@@ -556,6 +628,7 @@ function activeList() {
 
 /* ── render ─────────────────────────────────────────── */
 function renderAll() {
+  renderActiveFilters();
   renderSource(); renderNarrative(); renderKpis(); renderAdvice(); renderPodium();
   renderMap(); drawCharts(); renderTable(); renderMethod(); renderQuality(); reveal();
 }
@@ -750,6 +823,7 @@ function seatPositions() {
     const sorted = [...vals].sort((x, y) => x.v - y.v);
     const n = sorted.length;
     sorted.forEach((x, i) => out.set(x.seat, n === 1 ? 1 : i / (n - 1)));
+    SCALE.pivot = 0.5;   /* por construção o rank já é uniforme */
     return out;
   }
   const nums = vals.map(x => x.v);
@@ -757,6 +831,11 @@ function seatPositions() {
   const loV = st.span === 'minmax' ? Math.min(...nums) : (M.rel ? 0 : 0);
   const range = hiV - loV;
   vals.forEach(x => out.set(x.seat, range > 0 ? (x.v - loV) / range : 1));
+  /* mediana das posições — é nela que a curva de sensibilidade morde */
+  const ps = [...out.values()].sort((a, b) => a - b);
+  SCALE.pivot = ps.length
+    ? (ps.length % 2 ? ps[(ps.length - 1) / 2] : (ps[ps.length / 2 - 1] + ps[ps.length / 2]) / 2)
+    : 0.5;
   return out;
 }
 
@@ -775,6 +854,7 @@ function renderMap() {
   if (L.stairCol) extra += `<div class="stair" style="grid-column:${L.stairCol}" title="Escada">${ico('stairs')}<span>ESCADA</span></div>`;
   if (L.wcCol) extra += `<div class="wc" style="grid-row:1;grid-column:${L.wcCol}" title="Sanitário">${ico('wc')}</div>`;
   g.innerHTML = extra;
+  g.classList.toggle('onlytop', st.onlyTop);
   a.seats.forEach(s => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'seat'; b.dataset.seat = s.seat;
@@ -1027,6 +1107,27 @@ function simSeats(an) {
   const out = list.slice(0, n);
   return out.length ? out : an.seats.filter(s => s.appear).sort((a, b) => b.revenue - a.revenue).slice(0, n);
 }
+/* O cenário de demanda é a única premissa do modelo que não vem dos
+   dados — é um palpite do usuário. Por isso ele aparece traduzido em
+   bilhetes concretos, e não só como um percentual abstrato. */
+function renderScenExp(r) {
+  const el = $('#simScenExp'); if (!el) return;
+  const perdidos = Math.round(r.tickets * (1 - sim.ret / 100));
+  const nome = sim.ret >= 99 ? 'Otimista' : sim.ret >= 90 ? 'Base' : sim.ret >= 80 ? 'Conservador' : 'Pessimista';
+  const leitura = sim.ret >= 99
+    ? 'ninguém desiste da compra por causa do aumento. É o teto do que se pode esperar — sirva como limite, não como meta.'
+    : `de cada 100 pessoas que compram hoje, ${sim.ret} continuariam comprando depois do aumento. As outras ${100 - sim.ret} procurariam outro horário, outra poltrona ou outra empresa.`;
+  const cabe = r.breakEven > 0
+    ? `O ajuste se paga enquanto a perda ficar abaixo de <b>${pct(r.breakEven, 1)}</b> — no seu recorte, cerca de <b>${int(Math.round(r.tickets * r.breakEven))} bilhetes</b>. `
+    : '';
+  const agora = perdidos <= 0
+    ? `Aqui nenhum bilhete é perdido, então o ganho de <b>${brl0(r.delta)}</b> é o máximo possível.`
+    : r.delta >= 0
+      ? `Neste cenário você abre mão de <b>${int(perdidos)}</b> dos ${int(r.tickets)} bilhetes e ainda assim ganha <b>${brl0(r.delta)}</b>.`
+      : `Neste cenário a perda de <b>${int(perdidos)}</b> dos ${int(r.tickets)} bilhetes passa do ponto de equilíbrio: o aumento sairia <b>${brl0(Math.abs(r.delta))} no vermelho</b>. Ou o aumento é menor, ou a retenção precisa ser melhor que ${sim.ret}%.`;
+  el.innerHTML = `<b>${nome} (${sim.ret}%):</b> ${leitura} ${cabe}${agora}`;
+}
+
 const simOpts = () => sim.mode === 'abs'
   ? { mode: 'abs', abs: sim.abs, ret: sim.ret }
   : { mode: 'pct', pct: sim.pct, ret: sim.ret };
@@ -1096,6 +1197,7 @@ function doRenderSim(structural) {
     $('#rYear').textContent = (r.perYear >= 0 ? '+' : '') + brl0(r.perYear);
   }
   $$('#simOut .tk i').forEach(i => { i.style.width = i.dataset.w + '%'; });
+  renderScenExp(r);
   if ($('#simAbsHint')) {
     const tm = r.tickets ? r.base / r.tickets : 0;
     $('#simAbsHint').textContent = tm
@@ -1246,9 +1348,10 @@ async function openStudy(id) {
   st.an = an; st.layout = s.layout; st.ds = st.ds || null;
   $('#dlgHist').close();
   $('#enter').hidden = true; $('#dash').hidden = false;
+  $('#resume').hidden = true;
   saveCtx.id = rec.id; saveCtx.auto = false; invalidateSim();
   syncActions();
-  $('#hstatus').textContent = '· ' + rec.name;
+  document.title = `${rec.name} · Estudo de Poltronas`;
   $('#from').value = s.period.start || ''; $('#to').value = s.period.end || ''; $('#minN').value = s.minN;
   fillLayouts();
   const t = activeTop(); st.seat = t[0] ? t[0].seat : (an.seats.find(x => x.appear) || an.seats[0]).seat;
@@ -1270,7 +1373,7 @@ $('#btnDemo').addEventListener('click', async () => {
   try {
     await pause(320);
     phase('Reconstruindo as viagens…'); prog(.55); await pause(280);
-    st.ds = S.parseText(demoCsv(), 'Demonstração.csv'); st.layout = ''; st.sim = null;
+    st.ds = S.parseText(demoCsv(), 'Demonstração.csv'); st.layout = ''; st.layoutManual = false; st.sim = null;
     saveCtx.id = null; invalidateSim();
     phase('Calculando as métricas…'); prog(.82); await pause(260);
     run(true);
@@ -1313,13 +1416,50 @@ $('#btnMore').addEventListener('click', () => {
   $('#moreRow').hidden = !h;
   $('#btnMore').textContent = h ? '− Filtros' : '+ Filtros';
 });
+/* todos os campos de recorte, num só lugar */
+const FILTER_IDS = ['fMarket', 'fLine', 'fOrigin', 'fDest', 'fRoute', 'fService', 'fClass', 'fChannel', 'fWeek'];
 $('#btnClear').addEventListener('click', () => {
-  ['fService', 'fChannel', 'fClass', 'fRoute', 'fWeek'].forEach(id => $('#' + id).value = '');
+  FILTER_IDS.forEach(id => $('#' + id).value = '');
   $('#fOcc').value = '0'; $('#fLead').value = 'all';
   apply();
 });
-['from', 'to', 'minN', 'layout', 'fService', 'fChannel', 'fClass', 'fRoute', 'fWeek', 'fOcc', 'fLead'].forEach(id => {
-  $('#' + id).addEventListener('change', e => { if (id === 'layout') st.layout = e.target.value; apply(); });
+['from', 'to', 'minN', 'layout', ...FILTER_IDS, 'fOcc', 'fLead'].forEach(id => {
+  $('#' + id).addEventListener('change', e => {
+    /* escolher a planta na mão desliga a detecção automática */
+    if (id === 'layout') { st.layout = e.target.value; st.layoutManual = true; }
+    apply();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════
+   FILTROS ATIVOS
+   Numa base grande é fácil esquecer o que está ligado e ler o
+   número errado. Os filtros em vigor ficam visíveis abaixo do deck,
+   cada um removível com um clique.
+   ══════════════════════════════════════════════════════════════ */
+const FILTER_LABELS = {
+  fMarket: 'Mercado', fLine: 'Linha', fOrigin: 'Origem', fDest: 'Destino', fRoute: 'Trecho',
+  fService: 'Serviço', fClass: 'Classe', fChannel: 'Canal', fWeek: 'Dia', fOcc: 'Ocupação', fLead: 'Antecedência'
+};
+function renderActiveFilters() {
+  const host = $('#activeFilters'); if (!host) return;
+  const on = [];
+  FILTER_IDS.forEach(id => {
+    const el = $('#' + id);
+    if (el && el.value) on.push({ id, label: FILTER_LABELS[id], text: el.options[el.selectedIndex].text.replace(/\s*\(\d[\d.]*\)\s*$/, '') });
+  });
+  if ($('#fOcc').value && $('#fOcc').value !== '0') on.push({ id: 'fOcc', label: FILTER_LABELS.fOcc, text: $('#fOcc').options[$('#fOcc').selectedIndex].text, reset: '0' });
+  if ($('#fLead').value && $('#fLead').value !== 'all') on.push({ id: 'fLead', label: FILTER_LABELS.fLead, text: $('#fLead').options[$('#fLead').selectedIndex].text, reset: 'all' });
+  host.hidden = !on.length;
+  host.innerHTML = on.map(f => `<button class="fchip" type="button" data-drop="${f.id}" data-reset="${f.reset || ''}"
+    title="Remover este filtro"><i>${esc(f.label)}</i>${esc(f.text)}<svg><use href="#s-x"/></svg></button>`).join('')
+    + (on.length > 1 ? '<button class="fchip clear" type="button" data-drop="all">Limpar tudo</button>' : '');
+}
+$('#activeFilters').addEventListener('click', e => {
+  const b = e.target.closest('[data-drop]'); if (!b) return;
+  if (b.dataset.drop === 'all') return $('#btnClear').click();
+  $('#' + b.dataset.drop).value = b.dataset.reset || '';
+  apply();
 });
 $('#rankSwitch').addEventListener('click', e => {
   const b = e.target.closest('[data-rank]'); if (!b || b.dataset.rank === st.rank) return;
@@ -1404,9 +1544,11 @@ function screenState() {
   push('Período', `${dt(a.period.start)} a ${dt(a.period.end)}`);
   push('Amostra mínima', `${int(a.minN)} viagens`);
   push('Planta', S.LAYOUTS[a.layout].badge);
-  const sel = id => { const el = $('#' + id); return el && el.value ? el.options[el.selectedIndex].text : ''; };
-  push('Serviço', sel('fService')); push('Canal', sel('fChannel')); push('Classe', sel('fClass'));
-  push('Trecho', sel('fRoute')); push('Dia da semana', sel('fWeek'));
+  const sel = id => { const el = $('#' + id); return el && el.value ? el.options[el.selectedIndex].text.replace(/\s*\(\d[\d.]*\)\s*$/, '') : ''; };
+  push('Mercado', sel('fMarket')); push('Linha', sel('fLine'));
+  push('Origem', sel('fOrigin')); push('Destino', sel('fDest')); push('Trecho', sel('fRoute'));
+  push('Serviço', sel('fService')); push('Classe', sel('fClass')); push('Canal', sel('fChannel'));
+  push('Dia da semana', sel('fWeek'));
   if ($('#fOcc').value && $('#fOcc').value !== '0') push('Ocupação mínima', sel('fOcc'));
   if ($('#fLead').value && $('#fLead').value !== 'all') push('Antecedência', sel('fLead'));
 
@@ -1429,12 +1571,13 @@ function exportPdf() {
   } catch (e) { toast('Falha no PDF', e.message || String(e), true); }
 }
 $('#btnReset').addEventListener('click', () => {
-  st.ds = st.an = null; st.layout = ''; st.sim = null;
+  st.ds = st.an = null; st.layout = ''; st.layoutManual = false; st.sim = null;
   saveCtx.id = null; saveCtx.auto = false; invalidateSim();
   $('#dash').hidden = true; $('#enter').hidden = false;
-  $('#advice').hidden = true;
+  $('#advice').hidden = true; $('#resume').hidden = true;
   syncActions();
-  $('#hstatus').textContent = '· pronto'; $('#file').value = '';
+  document.title = 'Estudo de Poltronas'; $('#file').value = '';
+  loadHist().then(offerResume);
   scrollTo({ top: 0, behavior: 'smooth' });
 });
 $('#btnSave').addEventListener('click', askSave);
@@ -1545,8 +1688,53 @@ addEventListener('scroll', () => {
   $('#totop').classList.toggle('on', scrollY > 650);
 }, { passive: true });
 $('#totop').addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
+/* ══════════════════════════════════════════════════════════════
+   RETOMAR
+   Fechar a guia no meio de um estudo não deveria custar o trabalho
+   já feito. As métricas ficam em IndexedDB desde a importação, então
+   basta oferecer o último estudo de volta — sem abrir nada sozinho,
+   porque a intenção de quem volta pode ser começar outro.
+   ══════════════════════════════════════════════════════════════ */
+const RESUME_SKIP = 'poltronas:resume:dispensado';
+function quando(iso) {
+  const d = new Date(iso), agora = Date.now(), min = Math.round((agora - d.getTime()) / 60000);
+  if (min < 2) return 'agora há pouco';
+  if (min < 60) return `há ${min} minutos`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `há ${h} ${pl(h, 'hora', 'horas')}`;
+  const dias = Math.round(h / 24);
+  if (dias < 30) return `há ${dias} ${pl(dias, 'dia', 'dias')}`;
+  return `em ${d.toLocaleDateString('pt-BR')}`;
+}
+function offerResume() {
+  const el = $('#resume');
+  if (!el || st.an || !st.hist.length) return;
+  const r = st.hist[0];
+  let skip = '';
+  try { skip = localStorage.getItem(RESUME_SKIP) || ''; } catch (e) {}
+  if (skip === r.id) return;
+  const s = r.snap || {};
+  const p = s.period || {};
+  $('#resumeName').textContent = r.name;
+  $('#resumeMeta').textContent = [
+    `salvo ${quando(r.savedAt)}`,
+    p.start ? `${dt(p.start)} a ${dt(p.end)}` : null,
+    p.tripCount ? `${int(p.tripCount)} viagens` : null,
+    (S.LAYOUTS[r.layout] || {}).badge
+  ].filter(Boolean).join(' · ');
+  el.hidden = false;
+}
+$('#resumeGo').addEventListener('click', () => {
+  if (st.hist[0]) openStudy(st.hist[0].id);
+});
+$('#resumeAll').addEventListener('click', openHist);
+$('#resumeDismiss').addEventListener('click', () => {
+  $('#resume').hidden = true;
+  try { if (st.hist[0]) localStorage.setItem(RESUME_SKIP, st.hist[0].id); } catch (e) {}
+});
+
 buildPal();
-loadHist();
+loadHist().then(offerResume);
 syncActions();
 reveal();
 })();

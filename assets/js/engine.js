@@ -91,6 +91,7 @@ function mapHeaders(h) {
     destination: findCol(h, ['Destino'], ['destino']),
     status: findCol(h, ['Tipo Venda', 'Status', 'Situação'], ['tipo venda', 'situacao', 'status']),
     channel: findCol(h, ['canal'], ['canal']),
+    market: findCol(h, ['mercado', 'Mercado'], ['mercado']),
     agency: findCol(h, ['agencia', 'Agência'], ['agencia']),
     klass: findCol(h, ['classe'], ['classe'])
   };
@@ -197,7 +198,8 @@ function accumulator(headers, sourceName) {
   if (M.saleDate < 0) throw new Error('Não encontrei a coluna de data da venda.');
   if (M.tripDate < 0 && M.tripId < 0) throw new Error('Preciso de “Data Viagem” ou de um ID de viagem.');
   const trips = new Map(), q = blankQuality(), seatCount = {},
-    facets = { services: {}, channels: {}, classes: {}, routes: {}, lines: {} };
+    facets = { services: {}, channels: {}, classes: {}, routes: {}, lines: {},
+      markets: {}, origins: {}, destinations: {} };
 
   function add(r) {
     q.rawRows++;
@@ -220,9 +222,11 @@ function accumulator(headers, sourceName) {
 
     const svc = cell(r, M.service), lin = cell(r, M.line), kl = cell(r, M.klass);
     const org = cell(r, M.origin), dst = cell(r, M.destination), ch = cell(r, M.channel);
-    const route = org && dst ? `${org} → ${dst}` : (cell(r, M.lineName) || '');
+    const mkt = cell(r, M.market), lname = cell(r, M.lineName);
+    const route = org && dst ? `${org} → ${dst}` : (lname || '');
     bump(facets.services, svc); bump(facets.channels, ch); bump(facets.classes, kl);
-    bump(facets.routes, route); bump(facets.lines, cell(r, M.lineName));
+    bump(facets.routes, route); bump(facets.lines, lname);
+    bump(facets.markets, mkt); bump(facets.origins, org); bump(facets.destinations, dst);
 
     const hhmm = trip ? `${String(trip.hh).padStart(2, '0')}:${String(trip.mi).padStart(2, '0')}` : '';
     const tk = tripId ? 'v:' + key(tripId)
@@ -235,13 +239,15 @@ function accumulator(headers, sourceName) {
     let T = trips.get(tk);
     if (!T) {
       T = { k: tk, date: tDate ? tDate.iso : sale.iso, dow: tDate ? tDate.dow : sale.dow, fromTrip: !!tDate,
-        dep: trip ? trip.ms : null, time: hhmm, svc, lin, org, dst, route, klass: kl, seats: new Map() };
+        dep: trip ? trip.ms : null, time: hhmm, svc, lin, lname, org, dst, route, mkt, klass: kl, seats: new Map() };
       trips.set(tk, T);
     } else {
       if (trip && T.dep == null) { T.dep = trip.ms; T.time = hhmm; }
       if (tDate && !T.fromTrip) { T.date = tDate.iso; T.dow = tDate.dow; T.fromTrip = true; }
       if (!T.klass && kl) T.klass = kl;
       if (!T.route && route) T.route = route;
+      if (!T.mkt && mkt) T.mkt = mkt;
+      if (!T.lname && lname) T.lname = lname;
     }
     let S = T.seats.get(seat);
     if (!S) { S = { seat, ev: new Map() }; T.seats.set(seat, S); }
@@ -252,8 +258,8 @@ function accumulator(headers, sourceName) {
 
   function finish(extra) {
     const list = [...trips.values()].map(t => ({
-      k: t.k, date: t.date, dow: t.dow, dep: t.dep, time: t.time, svc: t.svc, lin: t.lin,
-      org: t.org, dst: t.dst, route: t.route, klass: t.klass,
+      k: t.k, date: t.date, dow: t.dow, dep: t.dep, time: t.time, svc: t.svc, lin: t.lin, lname: t.lname,
+      org: t.org, dst: t.dst, route: t.route, mkt: t.mkt, klass: t.klass,
       seats: [...t.seats.values()].map(s => ({ seat: s.seat, ev: [...s.ev.values()].sort((a, b) => a.m - b.m || a.i.localeCompare(b.i)) }))
         .sort((a, b) => a.seat - b.seat)
     })).sort((a, b) => String(a.date).localeCompare(String(b.date)) || a.k.localeCompare(b.k));
@@ -309,7 +315,8 @@ function parseText(text, name) {
 }
 function merge(list, name) {
   const map = new Map(), q = blankQuality(), seatCount = {},
-    facets = { services: {}, channels: {}, classes: {}, routes: {}, lines: {} };
+    facets = { services: {}, channels: {}, classes: {}, routes: {}, lines: {},
+      markets: {}, origins: {}, destinations: {} };
   list.forEach(ds => {
     Object.keys(q).forEach(k => q[k] += Number((ds.quality || {})[k] || 0));
     Object.entries(ds.seatCount || {}).forEach(([s, n]) => seatCount[s] = (seatCount[s] || 0) + n);
@@ -339,9 +346,39 @@ const LEADW = { all: null, w0: [0, 3], w1: [3, 7], w2: [7, 30], w3: [30, Infinit
 const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const round = (v, d) => v == null || !Number.isFinite(v) ? null : Math.round((v + Number.EPSILON) * 10 ** (d == null ? 4 : d)) / 10 ** (d == null ? 4 : d);
 
+/* Aplica os filtros de viagem (tudo menos os que dependem da poltrona).
+   Serve tanto para a análise quanto para redetectar a planta. */
+function tripPasses(t, o) {
+  if (o.start && t.date < o.start) return false;
+  if (o.end && t.date > o.end) return false;
+  if (o.service && t.svc !== o.service) return false;
+  if (o.klass && t.klass !== o.klass) return false;
+  if (o.route && t.route !== o.route) return false;
+  if (o.market && t.mkt !== o.market) return false;
+  if (o.line && t.lname !== o.line) return false;
+  if (o.origin && t.org !== o.origin) return false;
+  if (o.destination && t.dst !== o.destination) return false;
+  if (o.dow != null && o.dow !== '' && t.dow !== Number(o.dow)) return false;
+  return true;
+}
+
 function analyze(ds, o) {
   o = o || {};
-  const layoutId = o.layout || detect(ds.seatCount, ds.topClass).id;
+  /* A planta é detectada sobre o RECORTE, não sobre a base inteira.
+     Numa base com serviços de veículos diferentes, filtrar por uma
+     classe leito e continuar com a planta executiva jogaria todas as
+     poltronas para fora do mapa — e o estudo voltaria vazio. */
+  let layoutId = o.layout;
+  if (!layoutId) {
+    const sc = {};
+    let klass = '';
+    (ds.trips || []).forEach(t => {
+      if (!tripPasses(t, o)) return;
+      if (!klass && t.klass) klass = t.klass;
+      (t.seats || []).forEach(s => { sc[s.seat] = (sc[s.seat] || 0) + s.ev.length; });
+    });
+    layoutId = detect(Object.keys(sc).length ? sc : ds.seatCount, klass || ds.topClass).id;
+  }
   const L = LAYOUTS[layoutId];
   const win = LEADW[o.lead || 'all'];
   const minOcc = Number(o.minOcc) || 0;
@@ -356,12 +393,7 @@ function analyze(ds, o) {
   let tripsUsed = 0;
 
   (ds.trips || []).forEach(t => {
-    if (o.start && t.date < o.start) return;
-    if (o.end && t.date > o.end) return;
-    if (o.service && t.svc !== o.service) return;
-    if (o.klass && t.klass !== o.klass) return;
-    if (o.route && t.route !== o.route) return;
-    if (o.dow != null && o.dow !== '' && t.dow !== Number(o.dow)) return;
+    if (!tripPasses(t, o)) return;
 
     const seats = [];
     (t.seats || []).forEach(s => {
@@ -678,7 +710,9 @@ function xlsx(an, opts) {
   opts = opts || {};
   const L = window.Seat.LAYOUTS[an.layout];
   const f = an.filters || {};
-  const filtroTxt = [f.service && 'serviço ' + f.service, f.channel && 'canal ' + f.channel, f.klass && 'classe ' + f.klass,
+  const filtroTxt = [f.market && 'mercado ' + f.market, f.line && 'linha ' + f.line,
+    f.origin && 'origem ' + f.origin, f.destination && 'destino ' + f.destination,
+    f.service && 'serviço ' + f.service, f.channel && 'canal ' + f.channel, f.klass && 'classe ' + f.klass,
     f.route, f.dow !== '' && f.dow != null ? 'dia da semana ' + f.dow : '', f.minOcc ? 'ocupação ≥ ' + f.minOcc : '',
     f.lead && f.lead !== 'all' ? 'janela ' + f.lead : ''].filter(Boolean).join(' · ') || 'sem filtros extras';
 
