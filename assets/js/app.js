@@ -20,7 +20,8 @@ const DOW = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sába
 const st = { ds: null, an: null, metric: 'volume', rank: 'advance', seat: null, layout: '',
   pal: 'verde', sort: { k: 'avgPct', asc: true }, sim: null, hist: [],
   /* preferências visuais — ver dlgCfg */
-  inv: false, gamma: false, top5: true, tint: false, glow: true, pdfColor: true };
+  inv: false, top5: true, tint: false, glow: true, pdfColor: true,
+  sens: 45, span: 'zero', duo: false, duoA: '#123f2a', duoB: '#84e79c' };
 
 /* ══════════════════════════════════════════════════════════════
    PALETAS DO MAPA DE CALOR
@@ -49,18 +50,54 @@ const PALS = {
     dark: ['#25282a', '#454545', '#828282', '#E4E4E4'], light: ['#e6e6e3', '#c6c6c3', '#878783', '#262624'] }
 };
 const dark = () => document.documentElement.dataset.theme !== 'light';
-/* paradas da escala já na ordem de desenho: invertida quando o usuário pede */
+
+/* Paradas da escala, já na ordem de desenho.
+   Se "misturar duas cores" estiver ligado, o degradê é construído a
+   partir das duas cores escolhidas, com dois pontos intermediários
+   interpolados para a transição não ficar dura. */
 function stops() {
-  const a = PALS[st.pal][dark() ? 'dark' : 'light'].map(hex);
+  let a;
+  if (st.duo) {
+    const A = hex(st.duoA), B = hex(st.duoB);
+    a = [0, 1 / 3, 2 / 3, 1].map(t => A.map((c, i) => Math.round(c + (B[i] - c) * t)));
+  } else {
+    a = PALS[st.pal][dark() ? 'dark' : 'light'].map(hex);
+  }
   return st.inv ? a.slice().reverse() : a;
 }
-function hex(h) { let x = h.replace('#', ''); if (x.length === 3) x = x.split('').map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(x.slice(i, i + 2), 16)); }
-/* curva opcional: puxa o meio para baixo e abre a diferença entre valores próximos */
-const curve = t => st.gamma ? Math.pow(t, 1.7) : t;
+function hex(h) { let x = String(h).replace('#', ''); if (x.length === 3) x = x.split('').map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(x.slice(i, i + 2), 16)); }
+
+/* SENSIBILIDADE
+   O problema real: quando quase todas as poltronas vendem parecido,
+   os valores se amontoam no topo da escala e o mapa vira um bloco de
+   uma cor só. A curva abaixo redistribui a intensidade em torno do
+   meio — sensibilidade alta empurra valores baixos para baixo e altos
+   para cima, ampliando a diferença visual entre vizinhos.
+   0 = escala linear crua; 100 = separação máxima. */
+function curve(t) {
+  const s = Math.max(0, Math.min(100, st.sens)) / 100;
+  if (s <= 0.02) return t;
+  /* a inclinação cresce em cubo: a metade de baixo do controle regula
+     fino, e a de cima chega a um degrau quase binário — que é o que
+     serve quando a diferença real entre as poltronas é mínima */
+  const k = 1 + s * 6 + s * s * s * 34;
+  const f = x => 1 / (1 + Math.exp(-k * (x - 0.5)));
+  const lo = f(0), hi = f(1);                /* normaliza para [0,1] */
+  const sig = (f(t) - lo) / (hi - lo || 1);
+  /* a mistura com a linear também some no topo, para o extremo valer */
+  const w = Math.min(1, s * 1.25);
+  return t * (1 - w) + sig * w;
+}
 function ramp(t, sp) {
   const v = curve(Math.max(0, Math.min(1, t))), p = v * (sp.length - 1), i = Math.min(sp.length - 2, Math.floor(p)), f = p - i;
   return sp[i].map((c, j) => Math.round(c + (sp[i + 1][j] - c) * f));
 }
+const SENS_TXT = v => v < 12 ? 'linear' : v < 32 ? 'baixa' : v < 58 ? 'média' : v < 80 ? 'alta' : 'máxima';
+const SPAN_TXT = {
+  zero: 'Do zero até o maior valor. É a leitura mais honesta da grandeza absoluta, mas achata o mapa quando todas as poltronas vendem parecido.',
+  minmax: 'Do menor até o maior valor do recorte. Estica a escala para usar todas as cores — ótimo para enxergar diferenças pequenas.',
+  rank: 'Pela posição no ranking, não pelo valor. Cada poltrona ocupa uma faixa da escala; a diferença visual fica sempre distribuída por igual.'
+};
 const rgb = a => `rgb(${a[0]},${a[1]},${a[2]})`;
 const ink = a => (0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2]) > 148 ? '#0b0d0d' : '#f2f5f3';
 const hexOf = a => a.map(v => v.toString(16).padStart(2, '0')).join('');
@@ -124,7 +161,7 @@ function applyAccent() {
   const sp = PALS[st.pal][dark() ? 'dark' : 'light'];
   /* para tingir a interface vale sempre a parada mais saturada,
      mesmo com a escala invertida — senão o tema ficaria lavado */
-  const hi = sp[3];
+  const hi = st.duo ? st.duoB : sp[3];
   const r = document.documentElement.style;
   r.setProperty('--heat-hi', hi);
   r.setProperty('--heat-ink', ink(hex(hi)));
@@ -134,31 +171,42 @@ function applyAccent() {
   document.documentElement.dataset.glow = st.glow ? 'on' : 'off';
 }
 function hexToRgba(h, a) { const c = hex(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
-/* redesenha tudo que depende da escala */
+/* Redesenha o que depende da escala. Agrupado em um frame para não
+   disparar vários reflows quando o usuário arrasta a sensibilidade. */
+let repaintReq = 0;
 function repaint() {
   if (!st.an) return;
+  if (repaintReq) return;
+  repaintReq = requestAnimationFrame(() => {
+    repaintReq = 0;
+    paintSeats(); renderTable(); renderMethod(); renderCfgPreview();
+  });
+}
+/* redesenho completo — só quando os dados mudam, não a cada ajuste de cor */
+function repaintAll() {
+  if (!st.an) return;
   paintSeats(); drawCharts(); renderTable(); renderPodium(); renderMethod();
-  if ($('#dlgSim').open) renderSim();
 }
 function setPal(p, silent) {
   st.pal = PALS[p] ? p : 'verde';
-  if (!silent) DB.setPref('paleta', st.pal);
+  st.duo = false;
+  if (!silent) { DB.setPref('paleta', st.pal); DB.setPref('duo', false); }
   applyAccent();
   syncPalUI();
-  repaint();
+  repaintAll();
 }
 function setInvert(v, silent) {
   st.inv = !!v;
   if (!silent) DB.setPref('inverter', st.inv);
   applyAccent();
   syncPalUI();
-  repaint();
+  repaintAll();
 }
 /* mantém em sincronia os dois lugares que escolhem paleta:
    as bolinhas na barra do mapa e os cartões dentro de Ajustes */
 function syncPalUI() {
-  $$('#palPick button[data-pal]').forEach(b => b.classList.toggle('on', b.dataset.pal === st.pal));
-  $$('#cfgPal .palcard').forEach(b => b.classList.toggle('on', b.dataset.pal === st.pal));
+  $$('#palPick button[data-pal]').forEach(b => b.classList.toggle('on', !st.duo && b.dataset.pal === st.pal));
+  $$('#cfgPal .palcard').forEach(b => b.classList.toggle('on', !st.duo && b.dataset.pal === st.pal));
   const inv = $('#btnInvert');
   if (inv) { inv.classList.toggle('on', st.inv); inv.setAttribute('aria-pressed', String(st.inv)); }
   const c = $('#cfgInvert'); if (c) c.setAttribute('aria-pressed', String(st.inv));
@@ -184,11 +232,15 @@ function buildPal() {
   const p = DB.prefs();
   st.pal = PALS[p.paleta] ? p.paleta : 'verde';
   st.inv = p.inverter === true;
-  st.gamma = p.contraste === true;
   st.top5 = p.marcarTop5 !== false;
   st.tint = p.tingir === true;
   st.glow = p.brilho !== false;
   st.pdfColor = p.pdfCor !== false;
+  st.sens = Number.isFinite(+p.sensibilidade) ? +p.sensibilidade : 45;
+  st.span = ['zero', 'minmax', 'rank'].includes(p.referencia) ? p.referencia : 'zero';
+  st.duo = p.duo === true;
+  if (p.duoA) st.duoA = p.duoA;
+  if (p.duoB) st.duoB = p.duoB;
   applyAccent();
   setTheme(p.tema === 'light' ? 'light' : 'dark', true);
   st.metric = p.metric || 'volume';
@@ -204,9 +256,9 @@ function buildCfgPal() {
   host.innerHTML = Object.entries(PALS).map(([k, v]) => {
     const sp = v[dark() ? 'dark' : 'light'];
     const g = st.inv ? [...sp].reverse() : sp;
-    return `<button class="palcard" type="button" data-pal="${k}">
+    return `<button class="palcard${!st.duo && k === st.pal ? ' on' : ''}" type="button" data-pal="${k}">
       <i class="swatch" style="background:linear-gradient(90deg,${g.join(',')})"></i>
-      <span>${esc(v.name)}<em>${k === st.pal ? 'em uso' : ''}</em></span>
+      <span>${esc(v.name)}<em>${!st.duo && k === st.pal ? 'em uso' : ''}</em></span>
       <em style="font-weight:500">${esc(v.hint)}</em>
     </button>`;
   }).join('');
@@ -219,9 +271,10 @@ function renderCfgPreview() {
     return `<i style="background:${rgb(c)}"></i>`;
   }).join('');
   const h = $('#cfgScaleHint');
-  if (h) h.textContent = st.inv
-    ? 'Invertido: a poltrona que mais vende fica quase transparente e as fracas ganham a cor cheia — útil para caçar ociosidade.'
-    : 'Normal: a poltrona líder do recorte recebe a cor cheia e as demais desbotam proporcionalmente.';
+  if (h) h.textContent = (st.inv
+    ? 'Invertido: a poltrona que mais vende fica quase transparente e as fracas ganham a cor cheia — útil para caçar ociosidade. '
+    : 'Normal: a poltrona líder do recorte recebe a cor cheia e as demais desbotam proporcionalmente. ')
+    + `Sensibilidade ${SENS_TXT(st.sens)}.`;
   const cards = $('#cfgPal');
   if (cards) $$('.palcard .swatch', cards).forEach((el, i) => {
     const v = Object.values(PALS)[i], s = v[dark() ? 'dark' : 'light'];
@@ -231,9 +284,15 @@ function renderCfgPreview() {
 /* espelha o estado nos interruptores */
 function syncCfg() {
   const set = (id, v) => { const el = $(id); if (el) el.setAttribute('aria-pressed', String(!!v)); };
-  set('#cfgInvert', st.inv); set('#cfgGamma', st.gamma); set('#cfgTop5', st.top5);
+  set('#cfgInvert', st.inv); set('#cfgTop5', st.top5);
   set('#cfgTint', st.tint); set('#cfgLight', !dark()); set('#cfgGlow', st.glow);
-  set('#cfgPdfColor', st.pdfColor);
+  set('#cfgPdfColor', st.pdfColor); set('#cfgDuo', st.duo);
+  $('#cfgSens').value = st.sens;
+  $('#cfgSensTxt').textContent = SENS_TXT(st.sens);
+  $('#cfgSpanHint').textContent = SPAN_TXT[st.span];
+  $$('#cfgSpan button').forEach(b => b.classList.toggle('on', b.dataset.span === st.span));
+  $('#cfgDuoRow').hidden = !st.duo;
+  $('#cfgDuoA').value = st.duoA; $('#cfgDuoB').value = st.duoB;
   document.documentElement.dataset.top5 = st.top5 ? 'on' : 'off';
   const s = $('#cfgStorage');
   if (s) s.textContent = `${st.hist.length} ${pl(st.hist.length, 'estudo salvo', 'estudos salvos')} neste navegador · preferências em localStorage.`;
@@ -247,8 +306,32 @@ $('#cfgPal').addEventListener('click', e => {
   const b = e.target.closest('[data-pal]'); if (b) { setPal(b.dataset.pal); buildCfgPal(); syncPalUI(); }
 });
 $('#cfgInvert').addEventListener('click', () => { setInvert(!st.inv); syncCfg(); });
-$('#cfgGamma').addEventListener('click', () => {
-  st.gamma = !st.gamma; DB.setPref('contraste', st.gamma); syncCfg(); repaint();
+/* sensibilidade: repinta a cada frame enquanto arrasta, grava só ao soltar */
+$('#cfgSens').addEventListener('input', e => {
+  st.sens = Number(e.target.value);
+  $('#cfgSensTxt').textContent = SENS_TXT(st.sens);
+  repaint();
+});
+$('#cfgSens').addEventListener('change', () => { DB.setPref('sensibilidade', st.sens); repaintAll(); });
+$('#cfgSpan').addEventListener('click', e => {
+  const b = e.target.closest('[data-span]'); if (!b) return;
+  st.span = b.dataset.span; DB.setPref('referencia', st.span);
+  syncCfg(); repaintAll();
+});
+$('#cfgDuo').addEventListener('click', () => {
+  st.duo = !st.duo; DB.setPref('duo', st.duo);
+  applyAccent(); syncCfg(); syncPalUI(); repaintAll();
+});
+$('#cfgDuoA').addEventListener('input', e => { st.duoA = e.target.value; repaint(); });
+$('#cfgDuoB').addEventListener('input', e => { st.duoB = e.target.value; repaint(); });
+['#cfgDuoA', '#cfgDuoB'].forEach(id => $(id).addEventListener('change', () => {
+  DB.setPref('duoA', st.duoA); DB.setPref('duoB', st.duoB);
+  applyAccent(); repaintAll();
+}));
+$('#cfgDuoSwap').addEventListener('click', () => {
+  const a = st.duoA; st.duoA = st.duoB; st.duoB = a;
+  DB.setPref('duoA', st.duoA); DB.setPref('duoB', st.duoB);
+  applyAccent(); syncCfg(); repaintAll();
 });
 $('#cfgTop5').addEventListener('click', () => {
   st.top5 = !st.top5; DB.setPref('marcarTop5', st.top5); syncCfg();
@@ -268,18 +351,89 @@ $('#cfgClear').addEventListener('click', () => {
   toast('Preferências limpas', 'Os estudos salvos continuam no histórico. Recarregue para ver o padrão.');
 });
 
-/* ── overlay / avisos ───────────────────────────────── */
-function load(t, d, p, phase) {
-  $('#load').hidden = false; $('#loadTitle').textContent = t || 'Processando…';
-  $('#loadDetail').textContent = d || ''; if (phase) $('#loadPhase').textContent = phase;
-  prog(p == null ? 0 : p);
+/* ══════════════════════════════════════════════════════════════
+   DISPONIBILIDADE DAS AÇÕES
+   Sem base carregada não há o que simular, salvar ou exportar.
+   Os botões continuam visíveis — o usuário vê o que existe — mas
+   ficam inertes até o CSV entrar.
+   ══════════════════════════════════════════════════════════════ */
+function syncActions() {
+  const on = !!st.an;
+  $$('.dash').forEach(b => { b.disabled = !on; b.setAttribute('aria-disabled', String(!on)); });
+  $('#btnHist').disabled = false;
+  const t = $('#btnSim2'); if (t) t.disabled = !on;
+  const a = $('#advSim'); if (a) a.disabled = !on;
+  if (!on) $('#exportMenu').hidden = true;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   OVERLAY DE CARREGAMENTO
+   A barra é interpolada: o alvo vem do parser, e um laço de
+   animação persegue esse alvo. Arquivo pequeno não faz a barra
+   saltar de 0 a 100 num piscar — ela sempre percorre o caminho.
+   ══════════════════════════════════════════════════════════════ */
+/* O laço usa setInterval, não requestAnimationFrame: rAF congela em
+   aba oculta, e uma barra que nunca chega ao fim prenderia o overlay
+   na tela. 16 ms dá a mesma suavidade e continua correndo em segundo
+   plano, ainda que o navegador reduza a frequência. */
+const LOADQ = { target: 0, shown: 0, timer: 0, t0: 0 };
+function load(t, d, p, ph) {
+  const el = $('#load');
+  el.hidden = false; el.style.opacity = ''; el.style.transition = '';
+  $('#loadTitle').textContent = t || 'Processando…';
+  $('#loadDetail').textContent = d || ''; if (ph) $('#loadPhase').textContent = ph;
+  LOADQ.target = p == null ? 0 : p; LOADQ.shown = 0; LOADQ.t0 = Date.now();
+  paintProg();
+  startProg();
+}
+function startProg() {
+  if (LOADQ.timer) return;
+  LOADQ.timer = setInterval(() => {
+    const diff = LOADQ.target - LOADQ.shown;
+    if (Math.abs(diff) < .002) { LOADQ.shown = LOADQ.target; }
+    else LOADQ.shown += diff * (Math.abs(diff) > .3 ? .10 : .055);
+    paintProg();
+    if (LOADQ.shown >= 1) stopProg();
+  }, 16);
+}
+function stopProg() { if (LOADQ.timer) clearInterval(LOADQ.timer); LOADQ.timer = 0; }
+function paintProg() {
+  const v = Math.max(0, Math.min(1, LOADQ.shown));
+  $('#loadBar').style.width = (v * 100) + '%';
+  $('#loadPct').textContent = Math.round(v * 100) + '%';
 }
 function prog(p, d) {
-  const v = Math.max(0, Math.min(1, +p || 0));
-  $('#loadBar').style.width = (v * 100) + '%'; $('#loadPct').textContent = Math.round(v * 100) + '%';
+  LOADQ.target = Math.max(LOADQ.target, Math.max(0, Math.min(1, +p || 0)));
+  startProg();
   if (d != null) $('#loadDetail').textContent = d;
 }
-const unload = () => { $('#load').hidden = true; };
+function phase(txt, detail) {
+  $('#loadTitle').textContent = txt;
+  if (detail != null) $('#loadDetail').textContent = detail;
+}
+/* Espera a barra encher antes de sumir, respeitando um tempo mínimo
+   para o processo não parecer instantâneo. O prazo máximo garante que
+   o overlay saia mesmo se a animação for estrangulada pelo navegador. */
+function unloadSmooth(minMs) {
+  const min = minMs == null ? 900 : minMs;
+  const deadline = Date.now() + min + 2500;
+  return new Promise(res => {
+    const done = () => {
+      stopProg();
+      const el = $('#load');
+      el.style.transition = 'opacity .3s var(--ease)';
+      el.style.opacity = '0';
+      setTimeout(() => { el.hidden = true; el.style.opacity = ''; el.style.transition = ''; res(); }, 310);
+    };
+    const wait = () => {
+      const elapsed = Date.now() - LOADQ.t0;
+      if ((LOADQ.shown > .99 && elapsed >= min) || Date.now() > deadline) return done();
+      setTimeout(wait, 30);
+    };
+    wait();
+  });
+}
+const unload = () => { stopProg(); const el = $('#load'); el.hidden = true; el.style.opacity = ''; el.style.transition = ''; };
 function toast(t, m, err) {
   const el = document.createElement('div');
   el.className = 'toast' + (err ? ' err' : '');
@@ -302,25 +456,45 @@ function countUp(el, to, fmt, ms) {
 }
 
 /* ── leitura de arquivos ────────────────────────────── */
+const pause = ms => new Promise(r => setTimeout(r, ms));
+
 async function handle(files) {
   const list = [...(files || [])].filter(f => /\.(csv|txt)$/i.test(f.name));
   if (!list.length) { toast('Arquivo não reconhecido', 'Selecione um CSV ou TXT.', true); return; }
-  load('Lendo o arquivo…', 'Conferindo o cabeçalho', 0, 'Importação local');
+  load('Lendo o arquivo…', 'Procurando as colunas no cabeçalho', .04, 'Importação local');
   try {
+    /* 1 · leitura — a ordem das colunas no CSV não importa: o motor
+       localiza cada uma pelo nome, tolerando acento e maiúscula */
+    await pause(260);
     const parts = [];
     for (let i = 0; i < list.length; i++) {
-      $('#loadTitle').textContent = list.length > 1 ? `Lendo ${i + 1} de ${list.length}` : `Lendo ${list[i].name}`;
+      phase(list.length > 1 ? `Lendo ${i + 1} de ${list.length}` : `Lendo ${list[i].name}`);
       parts.push(await S.parseFile(list[i], { onProgress: u => {
         const w = u.total ? u.loaded / u.total : 0;
-        prog((i + w) / list.length * .85, `${int(u.rows)} linhas · ${Math.round(w * 100)}%`);
+        prog(.05 + (i + w) / list.length * .55, `${int(u.rows)} linhas lidas`);
       } }));
     }
-    prog(.9, 'Consolidando viagens…');
+
+    /* 2 · consolidação */
+    phase('Reconstruindo as viagens…', 'Agrupando bilhetes por veículo, data e horário');
+    prog(.68); await pause(300);
     st.ds = parts.length === 1 ? parts[0] : S.merge(parts, `${parts.length} arquivos`);
+
+    /* 3 · cálculo */
+    phase('Calculando as métricas…', 'Ordem de compra, antecedência e cobertura');
+    prog(.82); await pause(280);
     st.layout = ''; st.sim = null;
     run(true);
-    prog(1, 'Pronto'); setTimeout(unload, 180);
+
+    /* 4 · desenho */
+    phase('Desenhando o mapa…', S.LAYOUTS[st.an.layout].badge);
+    prog(.94); await pause(240);
+    prog(1, 'Pronto');
+    await unloadSmooth(1100);
+
     toast('Análise concluída', `${int(st.an.summary.events)} eventos em ${int(st.an.period.tripCount)} viagens.`);
+    /* todo estudo entra no histórico assim que é analisado */
+    askSave({ auto: true });
   } catch (e) { unload(); toast('Não consegui analisar', e && e.message ? e.message : String(e), true); }
   finally { $('#file').value = ''; }
 }
@@ -342,7 +516,7 @@ function run(reset) {
   st.an = an;
   if (!st.layout) st.layout = an.layout;
   $('#enter').hidden = true; $('#dash').hidden = false;
-  $$('.dash').forEach(b => b.hidden = false);
+  syncActions();
   $('#hstatus').textContent = '· ' + (an.sourceName || '');
   if (reset) {
     $('#from').value = an.period.start || ''; $('#to').value = an.period.end || '';
@@ -382,7 +556,7 @@ function activeList() {
 
 /* ── render ─────────────────────────────────────────── */
 function renderAll() {
-  renderSource(); renderNarrative(); renderKpis(); renderPodium();
+  renderSource(); renderNarrative(); renderKpis(); renderAdvice(); renderPodium();
   renderMap(); drawCharts(); renderTable(); renderMethod(); renderQuality(); reveal();
 }
 function renderSource() {
@@ -418,6 +592,78 @@ function renderKpis() {
     <div class="k"><span class="lbl">${esc(k.l)}</span><button class="i" data-info="${k.i}" type="button" aria-label="Explicar">i</button></div>
     <div class="v">${k.v}</div><div class="c">${esc(k.c)}</div></article>`).join('');
 }
+/* ══════════════════════════════════════════════════════════════
+   RECOMENDAÇÃO
+   Traduz o estudo numa frase que um gerente comercial leia sem
+   dicionário: quais poltronas testar, quanto subir e quanto isso
+   representa em um mês, seis meses e um ano.
+
+   O critério de escolha é o índice de oportunidade — cobertura,
+   precocidade e primeira escolha — porque poltrona que vende cedo
+   e sempre é a que menos sofre com um ajuste de preço. O valor
+   sugerido é deliberadamente modesto (10% ou o arredondamento de
+   10% do ticket) para caber num teste real.
+   ══════════════════════════════════════════════════════════════ */
+const adv = { mode: 'pct' };
+function adviceSeats() {
+  const a = st.an;
+  const pool = (a.byScore && a.byScore.length ? a.byScore : a.topVolume10 || [])
+    .filter(s => s.appear >= a.minN && s.revenue > 0);
+  return pool.slice(0, 3);
+}
+function renderAdvice() {
+  const a = st.an, el = $('#advice');
+  const seats = adviceSeats();
+  if (!seats.length || !a.summary.revenue) { el.hidden = true; return; }
+  el.hidden = false;
+
+  const tickets = seats.reduce((n, s) => n + (s.revN || 0), 0);
+  const receita = seats.reduce((n, s) => n + (s.revenue || 0), 0);
+  const ticketMedio = tickets ? receita / tickets : 0;
+
+  /* valor sugerido: 10%, arredondado para um número redondo em reais */
+  const pctSug = 10;
+  const brutoAbs = ticketMedio * pctSug / 100;
+  const absSug = brutoAbs >= 20 ? Math.round(brutoAbs / 5) * 5
+    : brutoAbs >= 5 ? Math.round(brutoAbs)
+      : Math.max(1, Math.round(brutoAbs * 2) / 2);
+
+  const r = S.simulate(a, adv.mode === 'abs'
+    ? { mode: 'abs', abs: absSug, ret: 100, seats }
+    : { mode: 'pct', pct: pctSug, ret: 100, seats });
+
+  const nomes = seats.map(s => s.seat);
+  const lista = nomes.length > 1
+    ? nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1]
+    : String(nomes[0]);
+  const ajuste = adv.mode === 'abs'
+    ? `<b>${brl0(absSug)}</b> por bilhete`
+    : `<b>${pctSug}%</b> no preço`;
+  const equiv = adv.mode === 'abs'
+    ? `cerca de ${pct(r.pctEfetivo, 1)} sobre o ticket médio delas`
+    : `algo perto de ${brl(brutoAbs)} por bilhete`;
+
+  $('#adviceText').innerHTML =
+    `Vale testar um aumento nas poltronas <b>${lista}</b> — são as que vendem mais cedo e aparecem em mais viagens, ` +
+    `então aguentam melhor um ajuste. Subindo ${ajuste} (${equiv}), o ganho seria de ` +
+    `<b>${brl0(r.perMonth)}</b> em um mês, <b>${brl0(r.perHalf)}</b> em seis meses e <b>${brl0(r.perYear)}</b> em um ano.`;
+
+  $('#adviceNums').innerHTML = [
+    ['Em 1 mês', brl0(r.perMonth)],
+    ['Em 6 meses', brl0(r.perHalf)],
+    ['Em 12 meses', brl0(r.perYear)],
+    ['No recorte analisado', brl0(r.delta)],
+    ['Margem de segurança', pct(r.breakEven, 1)]
+  ].map(([k, v]) => `<div><small>${esc(k)}</small><b>${v}</b></div>`).join('');
+
+  $('#adviceCaveat').textContent =
+    `Projeção linear a partir de ${int(a.period.calendarDays)} dias observados, sem queda de demanda. ` +
+    `Na prática dá para perder até ${pct(r.breakEven, 1)} das vendas dessas poltronas antes de empatar com a receita de hoje. ` +
+    `Ajuste o cenário no simulador antes de levar o número adiante.`;
+
+  adv.last = { seats, absSug, pctSug };
+}
+
 function renderPodium() {
   const a = st.an, mode = st.rank, top = activeTop();
   $$('#rankSwitch button').forEach(b => { const on = b.dataset.rank === mode; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
@@ -486,6 +732,34 @@ const METRICS = {
 };
 const mx = (a, m) => Math.max(0, ...a.seats.map(s => METRICS[m].get(s) || 0));
 
+/* POSIÇÃO DE CADA POLTRONA NA ESCALA (0 a 1), antes da curva de
+   sensibilidade. A referência muda conforme a preferência do usuário:
+   zero   — proporção sobre o maior valor (grandeza absoluta)
+   minmax — estica entre o menor e o maior valor com venda
+   rank   — usa só a ordem, ignorando a distância entre os valores
+   Devolve um Map para não recalcular a cada poltrona. */
+function seatPositions() {
+  const a = st.an, M = METRICS[st.metric], out = new Map();
+  const vals = [];
+  a.seats.forEach(s => {
+    const v = M.get(s);
+    if (s.appear > 0 && v != null) vals.push({ seat: s.seat, v: M.rel ? v : v });
+  });
+  if (!vals.length) return out;
+  if (st.span === 'rank') {
+    const sorted = [...vals].sort((x, y) => x.v - y.v);
+    const n = sorted.length;
+    sorted.forEach((x, i) => out.set(x.seat, n === 1 ? 1 : i / (n - 1)));
+    return out;
+  }
+  const nums = vals.map(x => x.v);
+  const hiV = Math.max(...nums);
+  const loV = st.span === 'minmax' ? Math.min(...nums) : (M.rel ? 0 : 0);
+  const range = hiV - loV;
+  vals.forEach(x => out.set(x.seat, range > 0 ? (x.v - loV) / range : 1));
+  return out;
+}
+
 function renderMap() {
   const a = st.an, L = S.LAYOUTS[a.layout];
   $$('#metricSwitch button').forEach(b => b.classList.toggle('on', b.dataset.metric === st.metric));
@@ -514,14 +788,14 @@ function renderMap() {
 function paintSeats() {
   const a = st.an, M = METRICS[st.metric], sp = stops();
   const top = new Set(activeTop().map(s => s.seat));
-  const max = M.rel ? Math.max(...a.seats.map(s => M.get(s) || 0), 0) : 1;
+  const pos = seatPositions();
   $('#legLow').textContent = M.low(a);
   $('#legHigh').textContent = M.high(a);
   $('#legTrack').style.background = `linear-gradient(90deg,${sp.map((c, i) => `${rgb(c)} ${(i / (sp.length - 1) * 100).toFixed(0)}%`).join(',')})`;
   a.seats.forEach(s => {
     const el = $(`.seat[data-seat="${s.seat}"]`); if (!el) return;
     const raw = M.get(s), has = s.appear > 0 && raw != null;
-    const t = has ? (M.rel ? (max ? raw / max : 0) : raw) : null;
+    const t = has ? pos.get(s.seat) : null;
     if (has) { const c = ramp(t, sp); el.style.background = rgb(c); el.style.color = ink(c); }
     else { el.style.background = 'var(--seat-empty)'; el.style.color = 'var(--seat-empty-ink)'; }
     el.classList.toggle('top5', top.has(s.seat));
@@ -635,7 +909,7 @@ const COLS = [
 ];
 function renderTable() {
   const a = st.an, q = ($('#seatSearch').value || '').trim(), sp = stops();
-  const max = Math.max(...a.seats.map(s => s.appear), 1);
+  const pos = seatPositions();   /* mesma escala do mapa, para a bolinha bater com a poltrona */
   const { k, asc } = st.sort;
   const rows = a.seats.filter(s => s.appear && (!q || String(s.seat).includes(q))).sort((x, y) => {
     const A = x[k], B = y[k];
@@ -645,7 +919,7 @@ function renderTable() {
   });
   $('#table').innerHTML = `<div class="head">${COLS.map(c => `<span data-sort="${c.k}" class="${k === c.k ? 's' + (asc ? ' asc' : '') : ''}">${c.t}</span>`).join('')}</div>` +
     (rows.length ? rows.map(s => {
-      const c = ramp(s.appear / max, sp), low = s.conf === 'Baixa' || s.conf === 'Insuficiente';
+      const c = ramp(pos.has(s.seat) ? pos.get(s.seat) : 0, sp), low = s.conf === 'Baixa' || s.conf === 'Insuficiente';
       return `<div class="row" data-seat-go="${s.seat}">
         <span class="c n"><i style="background:${rgb(c)}"></i>${s.seat}</span>
         <span class="c">${ico(s.position === 'Janela' ? 'window' : 'aisle')}${esc(s.position)} · ${esc(s.side)}</span>
@@ -700,7 +974,21 @@ function renderQuality() {
 }
 
 /* ══════ SIMULADOR ══════ */
-const sim = { scope: '3', seat: null, rank: 'volume', pct: 10, ret: 100, from: '', to: '' };
+const sim = { scope: '3', seat: null, rank: 'volume', mode: 'pct', pct: 10, abs: 5, ret: 100, from: '', to: '' };
+
+/* A análise completa é cara e só muda quando o período ou os filtros
+   mudam — não quando o usuário arrasta o percentual. Guardamos o
+   resultado por chave; mexer no slider passa a ser só aritmética. */
+const simCache = { key: '', an: null };
+function simBase() {
+  const o = Object.assign({}, opts(false), { start: sim.from || null, end: sim.to || null });
+  const key = JSON.stringify(o);
+  if (simCache.key === key && simCache.an) return simCache.an;
+  simCache.an = S.analyze(st.ds, o);
+  simCache.key = key;
+  return simCache.an;
+}
+const invalidateSim = () => { simCache.key = ''; simCache.an = null; };
 function openSim(pre) {
   if (!st.an) return;
   if (pre && pre.scope) { sim.scope = pre.scope; if (pre.seat) sim.seat = pre.seat; }
@@ -710,19 +998,27 @@ function openSim(pre) {
   $('#simSeat').innerHTML = st.an.seats.filter(s => s.appear).map(s =>
     `<option value="${s.seat}"${s.seat === (sim.seat || st.seat) ? ' selected' : ''}>Poltrona ${s.seat} · ${esc(s.position)} · ${brl0(s.revenue)}</option>`).join('');
   if (!sim.seat) sim.seat = st.seat;
+  if (pre && pre.mode) sim.mode = pre.mode;
+  if (pre && pre.abs != null) sim.abs = pre.abs;
+  if (pre && pre.pct != null) sim.pct = pre.pct;
   $('#simRank').value = sim.rank;
   $('#simPct').value = sim.pct; $('#simPctTxt').textContent = '+' + sim.pct + '%';
+  $('#simAbs').value = sim.abs; $('#simAbsTxt').textContent = '+' + brl0(sim.abs);
   $('#simRet').value = sim.ret; $('#simRetTxt').textContent = sim.ret + '%';
   $$('#simScope .chip').forEach(c => c.classList.toggle('on', c.dataset.scope === sim.scope));
   $$('#simPreset .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.pct) === sim.pct));
+  $$('#simAbsPreset .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.abs) === sim.abs));
   $$('#simScen .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.ret) === sim.ret));
+  syncSimMode();
   $('#simSeatWrap').hidden = sim.scope !== 'one';
+  $('#simOut').innerHTML = '';
   $('#dlgSim').showModal();
-  renderSim();
+  renderSim(true);
 }
-function simBase() {
-  const o = Object.assign({}, opts(false), { start: sim.from || null, end: sim.to || null });
-  return S.analyze(st.ds, o);
+function syncSimMode() {
+  $$('#simMode button').forEach(b => b.classList.toggle('on', b.dataset.mode === sim.mode));
+  $('#simModePct').hidden = sim.mode !== 'pct';
+  $('#simModeAbs').hidden = sim.mode !== 'abs';
 }
 function simSeats(an) {
   if (sim.scope === 'one') { const s = an.seats.find(x => x.seat === Number(sim.seat)); return s ? [s] : []; }
@@ -731,18 +1027,35 @@ function simSeats(an) {
   const out = list.slice(0, n);
   return out.length ? out : an.seats.filter(s => s.appear).sort((a, b) => b.revenue - a.revenue).slice(0, n);
 }
-function renderSim() {
+const simOpts = () => sim.mode === 'abs'
+  ? { mode: 'abs', abs: sim.abs, ret: sim.ret }
+  : { mode: 'pct', pct: sim.pct, ret: sim.ret };
+const simLabel = () => sim.mode === 'abs' ? `+${brl0(sim.abs)} por bilhete` : `+${sim.pct}%`;
+
+/* Repintura em dois níveis: arrastar o slider só reescreve os números
+   (barato, cabe num frame); a estrutura da tela é remontada apenas
+   quando muda a seleção de poltronas ou o período. */
+let simFrame = 0;
+function renderSim(structural) {
+  if (simFrame) cancelAnimationFrame(simFrame);
+  simFrame = requestAnimationFrame(() => { simFrame = 0; doRenderSim(structural); });
+}
+function doRenderSim(structural) {
   const an = simBase();
   const seats = simSeats(an);
-  const r = S.simulate(an, { pct: sim.pct, ret: sim.ret, seats });
+  const r = S.simulate(an, Object.assign(simOpts(), { seats }));
   st.sim = { r, an, seats };
   $('#simSub').textContent = `${dt(an.period.start)} a ${dt(an.period.end)} · ${int(an.period.tripCount)} viagens · ${seats.length} ${pl(seats.length, 'poltrona', 'poltronas')} no cenário`;
+
   const maxBar = Math.max(r.base, r.novo, 1);
   const curveMax = Math.max(...r.curve.map(c => Math.abs(c.v)), 1);
-  $('#simOut').innerHTML = `
+  const curLabel = c => c.abs ? `+${brl0(c.p)}` : `+${c.p}%`;
+  const curOn = c => c.abs ? Math.abs(c.p - sim.abs) < .01 : c.p === sim.pct;
+
+  const html = `
     <div class="bigres">
       <div><small>Receita atual</small><b id="rBase">—</b><span>${int(r.tickets)} bilhetes na seleção</span></div>
-      <div><small>Com +${sim.pct}%</small><b class="acc" id="rNovo">—</b><span>retenção de ${sim.ret}% da demanda</span></div>
+      <div><small>Com ${esc(simLabel())}</small><b class="acc" id="rNovo">—</b><span>retenção de ${sim.ret}% da demanda</span></div>
       <div><small>Ganho no período</small><b class="${r.delta >= 0 ? 'up' : 'dn'}" id="rDelta">—</b><span>${pct(r.deltaPct, 1)} sobre a seleção</span></div>
       <div><small>Projeção 12 meses</small><b class="${r.perYear >= 0 ? 'up' : 'dn'}" id="rYear">—</b><span>${brl(r.perDay)} por dia</span></div>
     </div>
@@ -752,25 +1065,43 @@ function renderSim() {
         <div class="cmprow"><span>Hoje</span><div class="tk"><i class="a" data-w="${(r.base / maxBar * 100).toFixed(1)}"></i></div><span class="vv">${brl0(r.base)}</span></div>
         <div class="cmprow"><span>Simulado</span><div class="tk"><i class="b" data-w="${(r.novo / maxBar * 100).toFixed(1)}"></i></div><span class="vv" style="color:var(--acc)">${brl0(r.novo)}</span></div>
       </div>
-      <h4 style="margin-top:16px">Sensibilidade — ganho por percentual de aumento</h4>
-      <div class="cmp">${r.curve.filter(c => c.p > 0).map(c => `<div class="cmprow"><span>+${c.p}%</span>
-        <div class="tk"><i class="${c.p === sim.pct ? 'b' : 'a'}" data-w="${(Math.abs(c.v) / curveMax * 100).toFixed(1)}"></i></div>
-        <span class="vv"${c.p === sim.pct ? ' style="color:var(--acc)"' : ''}>${brl0(c.v)}</span></div>`).join('')}</div>
+      <h4 style="margin-top:16px">Ganho por tamanho do aumento</h4>
+      <div class="cmp">${r.curve.filter(c => c.p > 0).map(c => `<div class="cmprow"><span>${curLabel(c)}</span>
+        <div class="tk"><i class="${curOn(c) ? 'b' : 'a'}" data-w="${(Math.abs(c.v) / curveMax * 100).toFixed(1)}"></i></div>
+        <span class="vv"${curOn(c) ? ' style="color:var(--acc)"' : ''}>${brl0(c.v)}</span></div>`).join('')}</div>
     </div>
     <div class="simtbl">
       <div class="r h"><span>Nº</span><span>Posição</span><span>Viagens</span><span>Ticket médio</span><span>Receita hoje</span><span>Ganho</span></div>
       ${r.seats.map((x, i) => `<div class="r${i < 3 ? ' t' : ''}"><span>${x.seat}</span><span>${esc(x.position)} · ${esc(x.side)}</span>
-        <span>${int(x.appear)}</span><span>${brl(x.avgRev)}</span><span>${brl0(x.base)}</span>
+        <span>${int(x.appear)}</span><span>${brl(x.avgRev)} → ${brl(x.novoTicket)}</span><span>${brl0(x.base)}</span>
         <span style="color:var(--acc);font-weight:800">+${brl0(x.delta)}</span></div>`).join('')}
     </div>
     <div class="simnote">A seleção representa <b>${pct(r.share, 1)}</b> da receita do recorte, então o impacto no total é de <b>${pct(r.totalDeltaPct, 2)}</b> (${brl0(r.totalBase)} → ${brl0(r.totalNovo)}).
-      Com +${sim.pct}% a operação suporta perder até <b>${pct(r.breakEven, 1)}</b> das vendas dessas poltronas antes de empatar com a receita de hoje.
+      Com ${esc(simLabel())}${sim.mode === 'abs' ? ` — cerca de ${pct(r.pctEfetivo, 1)} sobre o ticket médio` : ''} a operação suporta perder até <b>${pct(r.breakEven, 1)}</b> das vendas dessas poltronas antes de empatar com a receita de hoje.
       Cenário determinístico sobre dados observados: não estima elasticidade nem reação da concorrência.</div>`;
-  countUp($('#rBase'), r.base, v => brl0(v));
-  countUp($('#rNovo'), r.novo, v => brl0(v), 900);
-  countUp($('#rDelta'), r.delta, v => (v >= 0 ? '+' : '') + brl0(v), 900);
-  countUp($('#rYear'), r.perYear, v => (v >= 0 ? '+' : '') + brl0(v), 1000);
-  requestAnimationFrame(() => $$('#simOut .tk i').forEach(i => { i.style.width = i.dataset.w + '%'; }));
+
+  const out = $('#simOut');
+  const first = !out.children.length;
+  out.innerHTML = html;
+  /* contagem animada só na abertura; no arrasto o número entra direto */
+  if (first || structural) {
+    countUp($('#rBase'), r.base, v => brl0(v));
+    countUp($('#rNovo'), r.novo, v => brl0(v), 700);
+    countUp($('#rDelta'), r.delta, v => (v >= 0 ? '+' : '') + brl0(v), 700);
+    countUp($('#rYear'), r.perYear, v => (v >= 0 ? '+' : '') + brl0(v), 800);
+  } else {
+    $('#rBase').textContent = brl0(r.base);
+    $('#rNovo').textContent = brl0(r.novo);
+    $('#rDelta').textContent = (r.delta >= 0 ? '+' : '') + brl0(r.delta);
+    $('#rYear').textContent = (r.perYear >= 0 ? '+' : '') + brl0(r.perYear);
+  }
+  $$('#simOut .tk i').forEach(i => { i.style.width = i.dataset.w + '%'; });
+  if ($('#simAbsHint')) {
+    const tm = r.tickets ? r.base / r.tickets : 0;
+    $('#simAbsHint').textContent = tm
+      ? `Ticket médio da seleção hoje: ${brl(tm)}. Somar ${brl0(sim.abs)} equivale a ${pct(r.pctEfetivo, 1)}.`
+      : 'Sem receita na seleção para comparar.';
+  }
 }
 
 /* ══════ HISTÓRICO ══════ */
@@ -786,28 +1117,43 @@ function snapshot(an) {
     champFirst: an.champFirst ? keep(an.champFirst) : null, leadTop: an.leadTop ? keep(an.leadTop) : null,
     mostSold: an.mostSold ? keep(an.mostSold) : null, quality: an.quality, detected: an.detected };
 }
-function askSave() {
+/* Todo arquivo analisado vira um estudo no histórico. O diálogo abre
+   logo após a importação só para o usuário dar um nome — se ele
+   fechar, o estudo é gravado com o nome sugerido mesmo assim. */
+function askSave(o) {
   if (!st.an) return;
-  const a = st.an;
+  const a = st.an, auto = !!(o && o.auto);
   const guess = `${a.sourceName.replace(/\.(csv|txt)$/i, '')} · ${dt(a.period.start)} a ${dt(a.period.end)}`;
+  saveCtx.auto = auto;
+  saveCtx.id = auto ? null : saveCtx.id;
   $('#saveName').value = guess;
-  $('#saveHint').textContent = `${S.LAYOUTS[a.layout].badge} · ${int(a.period.tripCount)} viagens · ${brl0(a.summary.revenue)} · amostra mínima ${int(a.minN)}`;
+  $('#saveTitle').innerHTML = auto ? 'Como quer <b>chamar este estudo?</b>' : 'Que nome dar a <b>este estudo?</b>';
+  $('#saveHint').textContent = (auto ? 'Ele já está no histórico deste navegador. ' : '')
+    + `${S.LAYOUTS[a.layout].badge} · ${int(a.period.tripCount)} viagens · ${brl0(a.summary.revenue)} · amostra mínima ${int(a.minN)}`;
   $('#dlgSave').showModal();
   setTimeout(() => { $('#saveName').focus(); $('#saveName').select(); }, 60);
+  if (auto) doSave({ silent: true });   /* grava já; renomear depois só atualiza */
 }
-async function doSave() {
+const saveCtx = { auto: false, id: null };
+/* silent = gravação automática logo após a importação; sem silent é o
+   usuário confirmando o nome, que atualiza o mesmo registro. */
+async function doSave(o) {
+  const silent = !!(o && o.silent === true);
   const name = ($('#saveName').value || '').trim();
   if (!name) { toast('Dê um nome', 'O estudo precisa de um nome para ficar no histórico.', true); return; }
   const a = st.an;
-  const rec = { id: 'e' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+  if (!saveCtx.id) saveCtx.id = 'e' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+  const rec = { id: saveCtx.id,
     name, savedAt: new Date().toISOString(), layout: a.layout, source: a.sourceName,
     snap: snapshot(a), filters: a.filters, sim: st.sim ? st.sim.r : null };
   try {
     await DB.put(rec);
+    await loadHist();
+    if (silent) return;
     $('#dlgSave').close();
-    toast('Estudo salvo', `“${name}” está no histórico deste navegador.`);
-    loadHist();
-  } catch (e) { toast('Não deu para salvar', e.message || String(e), true); }
+    toast(saveCtx.auto ? 'Estudo renomeado' : 'Estudo salvo', `“${name}” está no histórico deste navegador.`);
+    saveCtx.auto = false;
+  } catch (e) { if (!silent) toast('Não deu para salvar', e.message || String(e), true); }
 }
 async function loadHist() { try { st.hist = await DB.all(); } catch (e) { st.hist = []; } }
 async function openHist() {
@@ -900,7 +1246,8 @@ async function openStudy(id) {
   st.an = an; st.layout = s.layout; st.ds = st.ds || null;
   $('#dlgHist').close();
   $('#enter').hidden = true; $('#dash').hidden = false;
-  $$('.dash').forEach(b => b.hidden = false);
+  saveCtx.id = rec.id; saveCtx.auto = false; invalidateSim();
+  syncActions();
   $('#hstatus').textContent = '· ' + rec.name;
   $('#from').value = s.period.start || ''; $('#to').value = s.period.end || ''; $('#minN').value = s.minN;
   fillLayouts();
@@ -918,13 +1265,19 @@ $('#drop').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key ==
 ['dragenter', 'dragover'].forEach(t => $('#drop').addEventListener(t, e => { e.preventDefault(); $('#drop').classList.add('on'); }));
 ['dragleave', 'drop'].forEach(t => $('#drop').addEventListener(t, e => { e.preventDefault(); $('#drop').classList.remove('on'); }));
 $('#drop').addEventListener('drop', e => handle(e.dataTransfer.files));
-$('#btnDemo').addEventListener('click', () => {
-  load('Gerando demonstração…', '60 viagens sintéticas', .4, 'Demonstração');
-  setTimeout(() => {
-    try { st.ds = S.parseText(demoCsv(), 'Demonstração.csv'); st.layout = ''; run(true); prog(1); setTimeout(unload, 160);
-      toast('Demonstração carregada', 'Números fictícios, só para conhecer o painel.'); }
-    catch (e) { unload(); toast('Falha', e.message, true); }
-  }, 50);
+$('#btnDemo').addEventListener('click', async () => {
+  load('Gerando demonstração…', '60 viagens sintéticas', .12, 'Demonstração');
+  try {
+    await pause(320);
+    phase('Reconstruindo as viagens…'); prog(.55); await pause(280);
+    st.ds = S.parseText(demoCsv(), 'Demonstração.csv'); st.layout = ''; st.sim = null;
+    saveCtx.id = null; invalidateSim();
+    phase('Calculando as métricas…'); prog(.82); await pause(260);
+    run(true);
+    prog(1, 'Pronto');
+    await unloadSmooth(900);
+    toast('Demonstração carregada', 'Números fictícios, só para conhecer o painel. Não vai para o histórico.');
+  } catch (e) { unload(); toast('Falha', e.message, true); }
 });
 function demoCsv() {
   const rows = ['Data Venda,Hora Venda,N° Bilhete,poltrona,Receita R$,codServico,codLinha,nomeLinha,Data Viagem,Hora Viagem,classe,Origem,Destino,Tipo Venda,canal'];
@@ -947,8 +1300,12 @@ function demoCsv() {
 function apply() {
   if (!st.ds) { toast('Base indisponível', 'Este estudo veio do histórico. Recarregue o CSV para mudar filtros.', true); return; }
   if ($('#from').value && $('#to').value && $('#from').value > $('#to').value) { toast('Período inválido', 'A data inicial precisa vir antes da final.', true); return; }
-  load('Recalculando…', 'Aplicando filtros', .35, 'Atualização');
-  setTimeout(() => { try { run(false); prog(1); setTimeout(unload, 130); } catch (e) { unload(); toast('Não deu para aplicar', e.message, true); } }, 30);
+  invalidateSim();
+  load('Recalculando…', 'Aplicando filtros ao recorte', .3, 'Atualização');
+  setTimeout(() => {
+    try { run(false); prog(1); unloadSmooth(520); }
+    catch (e) { unload(); toast('Não deu para aplicar', e.message, true); }
+  }, 40);
 }
 $('#btnApply').addEventListener('click', apply);
 $('#btnMore').addEventListener('click', () => {
@@ -992,13 +1349,39 @@ document.addEventListener('click', e => {
   const c = e.target.closest('[data-close]');
   if (c) $('#' + c.dataset.close).close();
 });
-$('#btnXls').addEventListener('click', () => {
+/* ── exportação: um botão, dois formatos ────────────── */
+function closeExportMenu() {
+  $('#exportMenu').hidden = true;
+  $('#btnExport').setAttribute('aria-expanded', 'false');
+}
+$('#btnExport').addEventListener('click', e => {
+  e.stopPropagation();
+  const m = $('#exportMenu');
+  if (!m.hidden) return closeExportMenu();
+  const r = $('#btnExport').getBoundingClientRect();
+  m.hidden = false;
+  const b = m.getBoundingClientRect();
+  m.style.left = Math.max(10, Math.min(innerWidth - b.width - 10, r.left + r.width / 2 - b.width / 2)) + 'px';
+  m.style.top = (r.bottom + 8) + 'px';
+  $('#btnExport').setAttribute('aria-expanded', 'true');
+});
+document.addEventListener('click', e => {
+  if (!$('#exportMenu').hidden && !e.target.closest('#exportMenu') && !e.target.closest('#btnExport')) closeExportMenu();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeExportMenu(); });
+addEventListener('resize', closeExportMenu);
+$('#exportMenu').addEventListener('click', e => {
+  const b = e.target.closest('[data-fmt]'); if (!b) return;
+  closeExportMenu();
+  b.dataset.fmt === 'pdf' ? exportPdf() : exportXlsx();
+});
+function exportXlsx() {
   try {
     OUT.xlsx(st.an, { title: 'Estudo de Poltronas', topSeats: activeTop(), sim: st.sim ? st.sim.r : null,
       filename: `estudo-poltronas_${st.an.period.start || 'inicio'}_a_${st.an.period.end || 'fim'}.xlsx` });
     toast('XLSX gerado', 'Resumo, poltronas, ritmo, simulação e metodologia.');
   } catch (e) { toast('Falha no XLSX', e.message || String(e), true); }
-});
+}
 /* O PDF sai sempre no tema claro (papel). A escala segue as mesmas
    escolhas do painel: paleta, inversão e contraste. */
 function pdfRamp() {
@@ -1006,19 +1389,51 @@ function pdfRamp() {
   const sp = st.inv ? [...src.light].reverse() : src.light;
   return sp.map(h => h.replace('#', ''));
 }
-$('#btnPdf').addEventListener('click', () => {
+/* Retrato do estado atual da tela: o PDF sai com a métrica que está
+   no mapa, o ranking selecionado, os filtros aplicados e a mesma
+   escala de cor — inclusive sensibilidade e inversão. */
+function screenState() {
+  const a = st.an, M = METRICS[st.metric];
+  const pos = seatPositions();
+  const heat = {};
+  a.seats.forEach(s => { if (pos.has(s.seat)) heat[s.seat] = curve(pos.get(s.seat)); });
+
+  const rotulo = { advance: 'Maior antecedência', first: 'Vendem primeiro', volume: 'Mais vendidas' };
+  const f = [];
+  const push = (k, v) => { if (v) f.push([k, v]); };
+  push('Período', `${dt(a.period.start)} a ${dt(a.period.end)}`);
+  push('Amostra mínima', `${int(a.minN)} viagens`);
+  push('Planta', S.LAYOUTS[a.layout].badge);
+  const sel = id => { const el = $('#' + id); return el && el.value ? el.options[el.selectedIndex].text : ''; };
+  push('Serviço', sel('fService')); push('Canal', sel('fChannel')); push('Classe', sel('fClass'));
+  push('Trecho', sel('fRoute')); push('Dia da semana', sel('fWeek'));
+  if ($('#fOcc').value && $('#fOcc').value !== '0') push('Ocupação mínima', sel('fOcc'));
+  if ($('#fLead').value && $('#fLead').value !== 'all') push('Antecedência', sel('fLead'));
+
+  return {
+    heat, metricLabel: M.label, metricDesc: M.desc,
+    legendLow: M.low(a), legendHigh: M.high(a),
+    rankLabel: rotulo[st.rank] || '', filters: f,
+    scale: `${st.duo ? 'cores personalizadas' : PALS[st.pal].name}${st.inv ? ' · invertida' : ''} · sensibilidade ${SENS_TXT(st.sens)} · referência ${st.span === 'rank' ? 'posição no ranking' : st.span === 'minmax' ? 'mínimo a máximo' : 'zero ao máximo'}`
+  };
+}
+function exportPdf() {
   try {
-    const r = pdfRamp();
-    OUT.pdf(st.an, { title: 'Estudo de Poltronas', topSeats: activeTop(), sim: st.sim ? st.sim.r : null,
-      ramp: r, acc: '1A1A18', invert: st.inv, gamma: st.gamma,
-      filename: `estudo-poltronas_${st.an.period.start || 'inicio'}_a_${st.an.period.end || 'fim'}.pdf` });
-    toast('PDF gerado', `Resumo, mapa de calor${st.inv ? ' (escala invertida)' : ''}, base completa` + (st.sim ? ' e simulação.' : '.'));
+    const s = screenState();
+    OUT.pdf(st.an, Object.assign({
+      title: 'Estudo de Poltronas', topSeats: activeTop(), sim: st.sim ? st.sim.r : null,
+      ramp: pdfRamp(), acc: '1A1A18', invert: st.inv,
+      filename: `estudo-poltronas_${st.an.period.start || 'inicio'}_a_${st.an.period.end || 'fim'}.pdf`
+    }, s));
+    toast('PDF gerado', `Espelha a tela: ${s.metricLabel.toLowerCase()}, ${s.filters.length} ${pl(s.filters.length, 'filtro', 'filtros')} e a escala em uso.`);
   } catch (e) { toast('Falha no PDF', e.message || String(e), true); }
-});
+}
 $('#btnReset').addEventListener('click', () => {
   st.ds = st.an = null; st.layout = ''; st.sim = null;
+  saveCtx.id = null; saveCtx.auto = false; invalidateSim();
   $('#dash').hidden = true; $('#enter').hidden = false;
-  $$('.dash').forEach(b => b.hidden = true);
+  $('#advice').hidden = true;
+  syncActions();
   $('#hstatus').textContent = '· pronto'; $('#file').value = '';
   scrollTo({ top: 0, behavior: 'smooth' });
 });
@@ -1051,10 +1466,14 @@ $('#simScope').addEventListener('click', e => {
   sim.scope = b.dataset.scope;
   $$('#simScope .chip').forEach(c => c.classList.toggle('on', c === b));
   $('#simSeatWrap').hidden = sim.scope !== 'one';
-  renderSim();
+  renderSim(true);
 });
-$('#simSeat').addEventListener('change', e => { sim.seat = Number(e.target.value); renderSim(); });
-$('#simRank').addEventListener('change', e => { sim.rank = e.target.value; renderSim(); });
+$('#simSeat').addEventListener('change', e => { sim.seat = Number(e.target.value); renderSim(true); });
+$('#simRank').addEventListener('change', e => { sim.rank = e.target.value; renderSim(true); });
+$('#simMode').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (!b || b.dataset.mode === sim.mode) return;
+  sim.mode = b.dataset.mode; syncSimMode(); renderSim(true);
+});
 $('#simPct').addEventListener('input', e => {
   sim.pct = Number(e.target.value); $('#simPctTxt').textContent = '+' + sim.pct + '%';
   $$('#simPreset .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.pct) === sim.pct));
@@ -1066,10 +1485,34 @@ $('#simPreset').addEventListener('click', e => {
   $$('#simPreset .chip').forEach(c => c.classList.toggle('on', c === b));
   renderSim();
 });
+$('#simAbs').addEventListener('input', e => {
+  sim.abs = Math.max(0, Number(e.target.value) || 0);
+  $('#simAbsTxt').textContent = '+' + brl0(sim.abs);
+  $$('#simAbsPreset .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.abs) === sim.abs));
+  renderSim();
+});
+$('#simAbsPreset').addEventListener('click', e => {
+  const b = e.target.closest('[data-abs]'); if (!b) return;
+  sim.abs = Number(b.dataset.abs); $('#simAbs').value = sim.abs;
+  $('#simAbsTxt').textContent = '+' + brl0(sim.abs);
+  $$('#simAbsPreset .chip').forEach(c => c.classList.toggle('on', c === b));
+  renderSim();
+});
 $('#simRet').addEventListener('input', e => {
   sim.ret = Number(e.target.value); $('#simRetTxt').textContent = sim.ret + '%';
   $$('#simScen .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.ret) === sim.ret));
   renderSim();
+});
+/* recomendação: alterna entre ler o aumento em % e em reais */
+$('#advTabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-adv]'); if (!b || b.dataset.adv === adv.mode) return;
+  adv.mode = b.dataset.adv;
+  $$('#advTabs button').forEach(x => x.classList.toggle('on', x === b));
+  renderAdvice();
+});
+$('#advSim').addEventListener('click', () => {
+  if (!adv.last) return openSim();
+  openSim({ scope: '3', rank: 'score', mode: adv.mode, abs: adv.last.absSug, pct: adv.last.pctSug });
 });
 $('#simScen').addEventListener('click', e => {
   const b = e.target.closest('[data-ret]'); if (!b) return;
@@ -1077,11 +1520,11 @@ $('#simScen').addEventListener('click', e => {
   $$('#simScen .chip').forEach(c => c.classList.toggle('on', c === b));
   renderSim();
 });
-$('#simFrom').addEventListener('change', e => { sim.from = e.target.value; renderSim(); });
-$('#simTo').addEventListener('change', e => { sim.to = e.target.value; renderSim(); });
+$('#simFrom').addEventListener('change', e => { sim.from = e.target.value; invalidateSim(); renderSim(true); });
+$('#simTo').addEventListener('change', e => { sim.to = e.target.value; invalidateSim(); renderSim(true); });
 $('#simReset').addEventListener('click', () => {
   sim.from = $('#from').value || st.an.period.start || ''; sim.to = $('#to').value || st.an.period.end || '';
-  $('#simFrom').value = sim.from; $('#simTo').value = sim.to; renderSim();
+  $('#simFrom').value = sim.from; $('#simTo').value = sim.to; invalidateSim(); renderSim(true);
 });
 $('#simXls').addEventListener('click', () => {
   if (!st.sim) return;
@@ -1104,5 +1547,6 @@ addEventListener('scroll', () => {
 $('#totop').addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
 buildPal();
 loadHist();
+syncActions();
 reveal();
 })();

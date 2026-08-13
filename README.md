@@ -48,8 +48,10 @@ Em **Ajustes** (engrenagem no cabeçalho) dá para configurar:
 | Opção | O que faz |
 |---|---|
 | Escala do mapa | nove paletas, incluindo uma em cinza para impressão em P&B |
+| Misturar duas cores | monte o degradê com duas cores próprias em vez de usar uma escala pronta |
 | Inverter a intensidade | quem vende mais fica quase transparente, e a cor cheia marca as poltronas fracas — para caçar ociosidade em vez de confirmar campeãs |
-| Contraste reforçado | curva na escala para separar valores próximos |
+| Sensibilidade | quanto a cor muda entre poltronas de valores próximos |
+| Referência da escala | `0 → máximo`, `mínimo → máximo` ou `posição no ranking` |
 | Marcar o top 5 | contorno neutro nas cinco poltronas do ranking ativo |
 | Tingir a interface | opcional: botões e barras adotam a cor do mapa |
 | Tema claro · brilho de fundo | aparência geral |
@@ -57,11 +59,32 @@ Em **Ajustes** (engrenagem no cabeçalho) dá para configurar:
 
 Tudo é gravado em `localStorage` e vale para os próximos estudos.
 
+### Quando o mapa fica todo da mesma cor
+
+É o caso comum de operação madura: quase toda poltrona vende em quase toda viagem, os valores se amontoam no topo e o degradê não tem o que separar. Duas saídas, ambas em **Ajustes → Escala**:
+
+- **Referência `mínimo → máximo`** estica a escala entre o pior e o melhor valor do recorte, em vez de partir do zero.
+- **Referência `posição no ranking`** ignora a distância entre os valores e distribui as cores pela ordem — a diferença visual fica sempre visível, mesmo que a diferença real seja pequena.
+
+A **sensibilidade** aplica uma curva por cima de qualquer uma das três. Vale lembrar do custo: quanto mais se estica a escala, mais uma diferença irrelevante parece grande. Para decidir preço, olhe o número na tabela, não só a cor.
+
 ## Dados
 
-O CSV precisa de **poltrona**, **data da venda** e algo que identifique a **viagem**. Colunas de serviço, classe, canal, origem/destino e receita são opcionais e ativam filtros, detecção de planta e a simulação de preço. Os nomes das colunas são reconhecidos de forma tolerante (acentos, maiúsculas e separadores não importam).
+O CSV precisa de **poltrona**, **data da venda** e algo que identifique a **viagem**. Colunas de serviço, classe, canal, origem/destino e receita são opcionais e ativam filtros, detecção de planta e a simulação de preço.
 
-Os estudos salvos ficam em IndexedDB, no próprio navegador.
+**A ordem das colunas não importa.** O motor localiza cada uma pelo nome do cabeçalho, tolerando acento, maiúscula, `º`, e separadores (`_`, `.`, `-`, `/`) — `Data Venda`, `data_venda` e `DATA DA VENDA` são a mesma coisa. Colunas desconhecidas são ignoradas sem reclamar.
+
+Todo arquivo analisado entra no histórico automaticamente, e o painel pede um nome logo em seguida. Os estudos ficam em IndexedDB, no próprio navegador.
+
+## Simulação
+
+Dois modos: **percentual** sobre o preço médio pago, ou **valor fixo em reais** somado a cada bilhete. Em ambos, o painel mostra o ganho no recorte, a projeção em 1, 6 e 12 meses e a **margem de segurança** — quanto da venda a operação suporta perder antes de empatar com a receita de hoje.
+
+O bloco **Recomendação**, na visão executiva, traduz isso em uma frase e sugere as três poltronas com melhor índice de oportunidade.
+
+## Relatório em PDF
+
+O PDF é um retrato da tela no momento em que foi gerado: a métrica ativa no mapa, o ranking selecionado, os filtros aplicados e a mesma escala de cor — inclusive inversão e sensibilidade. Trocar a métrica e exportar de novo produz um relatório diferente.
 
 ## Limites
 

@@ -476,33 +476,57 @@ function analyze(ds, o) {
 }
 
 /* ---- simulação de reajuste ---- */
+/* Dois modos de reajuste:
+   'pct' — percentual sobre o preço médio pago (padrão)
+   'abs' — valor fixo em reais somado a cada bilhete
+   Em ambos, a receita bruta é calculada antes da retenção e só
+   depois multiplicada por ela, para o ponto de equilíbrio sair certo. */
 function simulate(an, opt) {
+  const mode = opt.mode === 'abs' ? 'abs' : 'pct';
   const pct = Math.max(0, Number(opt.pct) || 0) / 100;
+  const abs = Math.max(0, Number(opt.abs) || 0);
   const ret = Math.min(1, Math.max(0, Number(opt.ret) == null ? 1 : Number(opt.ret) / 100));
   const seats = (opt.seats || []).map(s => {
     const base = s.revenue || 0;
-    const novo = base * (1 + pct) * ret;
-    return { seat: s.seat, position: s.position, side: s.side, appear: s.appear, tickets: s.revN || s.tickets,
-      avgRev: s.avgRev, base: round(base, 2), novo: round(novo, 2), delta: round(novo - base, 2),
-      novoTicket: round((s.avgRev || 0) * (1 + pct), 2) };
+    const tickets = s.revN || s.tickets || 0;
+    const cheio = mode === 'abs' ? base + abs * tickets : base * (1 + pct);
+    const novo = cheio * ret;
+    return { seat: s.seat, position: s.position, side: s.side, appear: s.appear, tickets,
+      avgRev: s.avgRev, base: round(base, 2), cheio: round(cheio, 2), novo: round(novo, 2),
+      delta: round(novo - base, 2),
+      novoTicket: round(mode === 'abs' ? (s.avgRev || 0) + abs : (s.avgRev || 0) * (1 + pct), 2) };
   });
   const base = seats.reduce((n, s) => n + s.base, 0);
+  const cheio = seats.reduce((n, s) => n + s.cheio, 0);
   const novo = seats.reduce((n, s) => n + s.novo, 0);
   const delta = novo - base;
   const total = an.summary.revenue || 0;
   const days = an.period.calendarDays || 1;
-  const breakEven = pct > 0 ? 1 - 1 / (1 + pct) : 0;
+  const tickets = seats.reduce((n, s) => n + (s.tickets || 0), 0);
+  /* quanto da venda dá para perder antes de empatar com a receita de hoje */
+  const breakEven = cheio > base ? 1 - base / cheio : 0;
+  /* percentual efetivo — no modo 'abs' depende do ticket médio da seleção */
+  const pctEfetivo = base ? cheio / base - 1 : 0;
   const curve = [];
-  for (let p = 0; p <= 40; p += 5) curve.push({ p, v: round(base * ((1 + p / 100) * ret - 1), 2) });
+  if (mode === 'abs') {
+    const step = abs > 0 ? abs / 2 : 2.5;
+    for (let i = 0; i <= 8; i++) {
+      const v = round(i * step, 2);
+      curve.push({ p: v, abs: true, v: round((base + v * tickets) * ret - base, 2) });
+    }
+  } else {
+    for (let p = 0; p <= 40; p += 5) curve.push({ p, v: round(base * ((1 + p / 100) * ret - 1), 2) });
+  }
   return {
-    pct: round(pct, 4), ret: round(ret, 4), seats,
-    base: round(base, 2), novo: round(novo, 2), delta: round(delta, 2),
+    mode, abs: round(abs, 2), pct: round(pct, 4), pctEfetivo: round(pctEfetivo, 4), ret: round(ret, 4), seats,
+    base: round(base, 2), cheio: round(cheio, 2), novo: round(novo, 2), delta: round(delta, 2),
     deltaPct: round(base ? delta / base : 0), share: round(total ? base / total : 0),
     totalBase: round(total, 2), totalNovo: round(total - base + novo, 2),
     totalDeltaPct: round(total ? delta / total : 0),
     perTrip: round(an.period.tripCount ? delta / an.period.tripCount : 0, 2),
     perDay: round(days ? delta / days : 0, 2), perYear: round(days ? delta / days * 365 : 0, 2),
-    breakEven: round(breakEven, 4), tickets: seats.reduce((n, s) => n + (s.tickets || 0), 0), curve
+    breakEven: round(breakEven, 4), tickets, curve,
+    perMonth: round(days ? delta / days * 30 : 0, 2), perHalf: round(days ? delta / days * 182 : 0, 2)
   };
 }
 
@@ -942,20 +966,33 @@ function pdf(an, opts) {
     ? `Nesse período de ${an.period.calendarDays} dias, com ${an.period.tripCount} viagens observadas, a poltrona ${an.champFirst.seat} foi comprada primeiro ${an.champFirst.first} vezes.`
     : 'Sem amostra suficiente no recorte selecionado.', A4.w - 110, 12.5, 16, { bold: true, color: DEEP, max: 2 });
   if (an.leadTop) p.text(48, 200, `Maior antecedência: poltrona ${an.leadTop.seat} · ${dec(an.leadTop.avgLead)} dias em média (mediana ${dec(an.leadTop.medLead)}, n=${an.leadTop.leadN}).`, 8, { color: MUT });
-  p.text(34, 230, 'Top 10 · maior antecedência', 11, { bold: true, color: DEEP });
+
+  /* recorte em vigor: o leitor precisa saber sobre o que olha */
+  if (opts.filters && opts.filters.length) {
+    p.text(34, 224, 'RECORTE APLICADO', 7, { bold: true, color: MUT });
+    let fx = 34;
+    opts.filters.slice(0, 7).forEach(([k, v]) => {
+      const txt = `${k}: ${v}`;
+      const w = Math.min(150, 7 + txt.length * 3.9);
+      p.rect(fx, 231, w, 14, SOFT, LINE, .5);
+      p.text(fx + 5, 236, clip(txt, w - 10, 6.8), 6.8, { color: INK });
+      fx += w + 6;
+    });
+  }
+  p.text(34, 258, 'Top 10 · maior antecedência', 11, { bold: true, color: DEEP });
   const c1 = [{ t: 'Pos', w: 34, a: 'center' }, { t: 'Poltrona', w: 52, a: 'center' }, { t: 'Média (d)', w: 60, a: 'right' },
     { t: 'Mediana', w: 55, a: 'right' }, { t: 'n', w: 40, a: 'right' }, { t: 'Viagens', w: 52, a: 'right' },
     { t: 'Receita', w: 78, a: 'right' }, { t: 'Posição', w: 115, a: 'left' }];
-  table(p, 34, 244, c1, an.topLead10.slice(0, 10).map((s, i) => [i + 1, s.seat, dec(s.avgLead), dec(s.medLead), s.leadN, s.appear, money0(s.revenue), `${s.position} · ${s.side}`]), 16, 5);
-  p.text(444, 230, 'Top 10 · vendem primeiro', 11, { bold: true, color: DEEP });
+  table(p, 34, 272, c1, an.topLead10.slice(0, 10).map((s, i) => [i + 1, s.seat, dec(s.avgLead), dec(s.medLead), s.leadN, s.appear, money0(s.revenue), `${s.position} · ${s.side}`]), 16, 5);
+  p.text(444, 258, 'Top 10 · vendem primeiro', 11, { bold: true, color: DEEP });
   const c2 = [{ t: 'Pos', w: 34, a: 'center' }, { t: 'Poltrona', w: 52, a: 'center' }, { t: 'Percentil', w: 58, a: 'right' },
     { t: 'Rank', w: 46, a: 'right' }, { t: '1ª', w: 36, a: 'right' }, { t: 'Viagens', w: 52, a: 'right' },
     { t: 'Receita', w: 78, a: 'right' }, { t: 'Posição', w: 8, a: 'left' }];
-  table(p, 444, 244, c2, an.top10.slice(0, 10).map((s, i) => [i + 1, s.seat, pctS(s.avgPct), dec(s.avgRank, 2), s.first, s.appear, money0(s.revenue), '']), 16, 5);
+  table(p, 444, 272, c2, an.top10.slice(0, 10).map((s, i) => [i + 1, s.seat, pctS(s.avgPct), dec(s.avgRank, 2), s.first, s.appear, money0(s.revenue), '']), 16, 5);
 
   /* página 2 — mapa */
   p = new Page(A4.w, A4.h); pages.push(p);
-  pdfHead(p, 'Mapa de calor das poltronas', L.badge, 2, total, an.sourceName);
+  pdfHead(p, `Mapa de calor · ${opts.metricLabel || 'volume de vendas'}`, L.badge, 2, total, an.sourceName);
   p.text(34, 72, 'FRENTE', 7.5, { bold: true, color: THEME.acc });
   p.text(A4.w - 34, 72, 'FUNDO', 7.5, { bold: true, color: THEME.acc, align: 'right' });
   p.rect(34, 90, A4.w - 68, 330, 'F4F6F6', 'A8B4B4', 1);
@@ -966,9 +1003,14 @@ function pdf(an, opts) {
   const rowTop = { 1: 108, 2: 158, 4: 264, 5: 314 };
   const maxV = Math.max(...an.seats.map(s => s.appear), 1);
   const t5set = new Set((opts.topSeats || an.topLead10.slice(0, 5)).map(s => s.seat));
+  /* opts.heat vem da tela: intensidade já calculada com a métrica, a
+     referência e a sensibilidade que o usuário escolheu. Sem ele,
+     o relatório cai no volume de vendas. */
+  const heat = opts.heat || null;
   an.seats.forEach(s => {
     const x = sx + (s.col - 1) * (sw + g2), top = rowTop[s.gridRow];
-    const t = s.appear / maxV, fill = s.appear ? rampAt(t) : 'E3E7E7';
+    const t = heat ? (heat[s.seat] == null ? 0 : heat[s.seat]) : s.appear / maxV;
+    const fill = s.appear ? rampAt(t) : 'E3E7E7';
     p.rect(x, top, sw, shh, fill, t5set.has(s.seat) ? THEME.acc : 'B9C4C4', t5set.has(s.seat) ? 2 : .6);
     const light = lum(fill) < .56;
     p.text(x + sw / 2, top + 8, String(s.seat), 11, { bold: true, color: light ? 'FFFFFF' : INK, align: 'center' });
@@ -987,15 +1029,16 @@ function pdf(an, opts) {
   }
   p.rect(sx, 212, avail, 40, 'E4EAEA');
   p.text(sx + avail / 2, 225, 'CORREDOR CENTRAL · HO', 8.5, { bold: true, color: MUT, align: 'center' });
-  p.text(34, 438, 'Menos vendida', 7.5, { color: MUT });
+  const legLow = opts.legendLow || 'Menos vendida';
+  const legHigh = opts.legendHigh || `Mais vendida (${maxV} viagens)`;
+  p.text(34, 438, legLow, 7.5, { color: MUT });
   for (let i = 0; i < 14; i++) p.rect(112 + i * 17, 434, 17, 12, rampAt(i / 13));
-  p.text(356, 438, `Mais vendida (${maxV} viagens)`, 7.5, { color: MUT });
+  p.text(356, 438, legHigh, 7.5, { color: MUT });
   p.rect(510, 432, 15, 15, 'FFFFFF', THEME.acc, 2);
-  p.text(534, 437, 'Top 5 do ranking ativo', 7.5, { color: MUT });
-  p.para(34, 462, `${L.ctx} A intensidade é a razão entre as viagens da poltrona e a poltrona mais vendida do recorte. ` +
-    (opts.invert
-      ? 'A escala está invertida neste relatório: quanto MAIS a poltrona vende, mais clara ela aparece — a cor cheia marca as poltronas de menor giro.'
-      : 'Quanto mais a poltrona vende, mais intensa a cor.'), A4.w - 68, 7.6, 10.5, { color: MUT, max: 3 });
+  p.text(534, 437, `Top 5 · ${opts.rankLabel || 'ranking ativo'}`, 7.5, { color: MUT });
+  p.para(34, 462, `${L.ctx} ${opts.metricDesc || 'A intensidade é a razão entre as viagens da poltrona e a poltrona mais vendida do recorte.'} ` +
+    (opts.invert ? 'A escala está invertida: a cor cheia marca os valores MENORES. ' : '') +
+    (opts.scale ? `Escala: ${opts.scale}.` : ''), A4.w - 68, 7.6, 10.5, { color: MUT, max: 3 });
 
   /* página 3 — tabela completa */
   p = new Page(A4.w, A4.h); pages.push(p);
@@ -1018,7 +1061,8 @@ function pdf(an, opts) {
     p = new Page(A4.w, A4.h); pages.push(p);
     pdfHead(p, 'Simulação de reajuste', 'CENÁRIO DE PREÇO', 4, total, an.sourceName);
     card(p, 34, 74, cw, 66, 'Receita atual', money0(s.base), `${s.seats.length} poltronas · ${s.tickets} bilhetes`);
-    card(p, 34 + cw + gap, 74, cw, 66, `Com +${(s.pct * 100).toFixed(0)}%`, money0(s.novo), `retenção de demanda ${(s.ret * 100).toFixed(0)}%`);
+    const ajuste = s.mode === 'abs' ? `+${money0(s.abs)} por bilhete` : `+${(s.pct * 100).toFixed(0)}%`;
+    card(p, 34 + cw + gap, 74, cw, 66, `Com ${ajuste}`, money0(s.novo), `retenção de demanda ${(s.ret * 100).toFixed(0)}%`);
     card(p, 34 + (cw + gap) * 2, 74, cw, 66, 'Ganho no período', money0(s.delta), `${pctS(s.deltaPct)} sobre a seleção`, '1F7A3A');
     card(p, 34 + (cw + gap) * 3, 74, cw, 66, 'Projeção 12 meses', money0(s.perYear), `${money0(s.perDay)} por dia`, '1F7A3A');
     p.text(34, 160, 'Poltronas do cenário', 11, { bold: true, color: DEEP });
@@ -1030,8 +1074,10 @@ function pdf(an, opts) {
     p.rect(34, end + 16, A4.w - 68, 58, SOFT, LINE, .6);
     p.rect(34, end + 16, 3, 58, WARN);
     p.text(48, end + 26, 'COMO LER', 7, { bold: true, color: WARN });
-    p.para(48, end + 38, `Receita simulada = receita observada × (1 + ${(s.pct * 100).toFixed(0)}%) × ${(s.ret * 100).toFixed(0)}% de retenção. ` +
-      `Com esse aumento a operação suporta perder até ${pctS(s.breakEven)} das vendas dessas poltronas antes de empatar com a receita atual. ` +
+    p.para(48, end + 38, (s.mode === 'abs'
+      ? `Receita simulada = (receita observada + ${money0(s.abs)} × bilhetes) × ${(s.ret * 100).toFixed(0)}% de retenção — equivale a ${(s.pctEfetivo * 100).toFixed(1)}% sobre o ticket médio da seleção. `
+      : `Receita simulada = receita observada × (1 + ${(s.pct * 100).toFixed(0)}%) × ${(s.ret * 100).toFixed(0)}% de retenção. `) +
+      `Com esse ajuste a operação suporta perder até ${pctS(s.breakEven)} das vendas dessas poltronas antes de empatar com a receita atual. ` +
       `A seleção representa ${pctS(s.share)} da receita do recorte, então o impacto no total é de ${pctS(s.totalDeltaPct)}. ` +
       `Trata-se de um cenário determinístico sobre dados observados: não estima elasticidade nem prevê reação da concorrência.`, A4.w - 110, 7.6, 10.5, { color: MUT, max: 4 });
   }

@@ -41,16 +41,21 @@
 
 <header class="top">
   <div class="wrap">
-    <span class="brand"><span class="dot"></span>Estudo de Poltronas <small id="hstatus">· pronto</small></span>
+    <span class="brand">Estudo de Poltronas <small id="hstatus">· pronto</small></span>
     <div class="hactions">
-      <button class="gh dash" id="btnSim" type="button" title="Simular valores"><svg><use href="#s-sim"/></svg><span class="full">Simular valores</span><span class="short">Simular</span></button>
-      <button class="gh dash" id="btnSave" type="button" title="Salvar estudo"><svg><use href="#s-save"/></svg><span class="full">Salvar estudo</span><span class="short">Salvar</span></button>
-      <button class="gh" id="btnHist" type="button" title="Histórico"><svg><use href="#s-hist"/></svg><span class="full">Histórico</span><span class="short">Hist.</span></button>
-      <button class="gh dash" id="btnXls" type="button" title="Exportar XLSX"><svg><use href="#s-dn"/></svg><span class="short">XLSX</span></button>
-      <button class="gh dash" id="btnPdf" type="button" title="Exportar PDF"><svg><use href="#s-dn"/></svg><span class="short">PDF</span></button>
-      <button class="gh dash" id="btnReset" type="button" title="Nova análise"><svg><use href="#s-refresh"/></svg><span class="full">Nova análise</span><span class="short">Nova</span></button>
+      <button class="gh dash" id="btnSim" type="button" title="Simular valores"><svg><use href="#s-sim"/></svg><span class="full">Simular</span></button>
+      <button class="gh dash" id="btnSave" type="button" title="Renomear ou salvar de novo"><svg><use href="#s-save"/></svg><span class="full">Salvar</span></button>
+      <button class="gh" id="btnHist" type="button" title="Histórico"><svg><use href="#s-hist"/></svg><span class="full">Histórico</span></button>
+      <button class="gh dash" id="btnExport" type="button" title="Exportar relatório" aria-haspopup="true" aria-expanded="false"><svg><use href="#s-dn"/></svg><span class="full">Exportar</span></button>
+      <button class="gh dash" id="btnReset" type="button" title="Nova análise"><svg><use href="#s-refresh"/></svg><span class="full">Nova</span></button>
       <button class="gh icon" id="btnCfg" type="button" aria-label="Ajustes" title="Ajustes"><svg><use href="#s-cog"/></svg></button>
       <button class="gh icon" id="btnTheme" type="button" aria-label="Alternar tema"><svg id="themeIcon"><use href="#s-sun"/></svg></button>
+    </div>
+    <div class="menu" id="exportMenu" hidden role="menu" aria-label="Formato do relatório">
+      <button type="button" role="menuitem" data-fmt="pdf"><svg><use href="#s-file"/></svg>
+        <span><b>PDF</b><small>Resumo, mapa de calor e base — pronto para apresentar</small></span></button>
+      <button type="button" role="menuitem" data-fmt="xlsx"><svg><use href="#s-sim"/></svg>
+        <span><b>Excel (XLSX)</b><small>Abas com resumo, poltronas, ritmo e metodologia</small></span></button>
     </div>
   </div>
 </header>
@@ -126,6 +131,20 @@
     </div>
     <article class="narr rv"><span class="mk">i</span><div><small>Leitura principal</small><p id="narr">—</p><p class="sub" id="narrSub"></p></div></article>
     <div class="kpis rv" id="kpis"></div>
+    <article class="advice rv" id="advice" hidden>
+      <div class="advhead"><span class="lbl">Recomendação</span>
+        <div class="advtabs" id="advTabs" role="group" aria-label="Base do cálculo">
+          <button type="button" data-adv="pct" class="on">Em %</button>
+          <button type="button" data-adv="abs">Em R$</button>
+        </div>
+      </div>
+      <p id="adviceText">—</p>
+      <div class="advnums" id="adviceNums"></div>
+      <div class="advfoot">
+        <button class="gh" id="advSim" type="button"><svg><use href="#s-sim"/></svg>Abrir no simulador</button>
+        <small id="adviceCaveat">—</small>
+      </div>
+    </article>
   </section>
 
   <section id="secTop">
@@ -266,14 +285,37 @@
           </div>
           <div class="box">
             <span class="lbl">Aumento de preço</span>
-            <div class="rangeval"><b id="simPctTxt">+10%</b><span>sobre o preço médio pago</span></div>
-            <input id="simPct" type="range" min="0" max="60" step="1" value="10">
-            <div class="chips" style="margin-top:8px" id="simPreset">
-              <button class="chip" data-pct="5" type="button">5%</button>
-              <button class="chip on" data-pct="10" type="button">10%</button>
-              <button class="chip" data-pct="15" type="button">15%</button>
-              <button class="chip" data-pct="20" type="button">20%</button>
-              <button class="chip" data-pct="30" type="button">30%</button>
+            <div class="switch modes" id="simMode" role="group" aria-label="Tipo de aumento">
+              <button type="button" data-mode="pct" class="on">Percentual</button>
+              <button type="button" data-mode="abs">Valor em R$</button>
+            </div>
+
+            <div id="simModePct">
+              <div class="rangeval"><b id="simPctTxt">+10%</b><span>sobre o preço médio pago</span></div>
+              <input id="simPct" type="range" min="0" max="60" step="1" value="10">
+              <div class="chips" style="margin-top:8px" id="simPreset">
+                <button class="chip" data-pct="5" type="button">5%</button>
+                <button class="chip on" data-pct="10" type="button">10%</button>
+                <button class="chip" data-pct="15" type="button">15%</button>
+                <button class="chip" data-pct="20" type="button">20%</button>
+                <button class="chip" data-pct="30" type="button">30%</button>
+              </div>
+            </div>
+
+            <div id="simModeAbs" hidden>
+              <div class="rangeval"><b id="simAbsTxt">+R$ 5</b><span>somados a cada bilhete</span></div>
+              <div class="fld moneyfld">
+                <label for="simAbs">Valor por bilhete</label>
+                <div class="moneywrap"><span>R$</span><input id="simAbs" type="number" min="0" max="500" step="0.5" value="5" inputmode="decimal"></div>
+              </div>
+              <div class="chips" style="margin-top:8px" id="simAbsPreset">
+                <button class="chip" data-abs="2" type="button">R$ 2</button>
+                <button class="chip on" data-abs="5" type="button">R$ 5</button>
+                <button class="chip" data-abs="10" type="button">R$ 10</button>
+                <button class="chip" data-abs="20" type="button">R$ 20</button>
+                <button class="chip" data-abs="50" type="button">R$ 50</button>
+              </div>
+              <p class="fldhint" id="simAbsHint">—</p>
             </div>
           </div>
           <div class="box">
@@ -366,6 +408,19 @@
           <span class="lbl">Mapa de calor</span>
           <p>A cor do painel é neutra de propósito: quem carrega significado é o mapa. Escolha aqui a escala.</p>
           <div class="palgrid" id="cfgPal"></div>
+
+          <div class="cfgrow" style="margin-top:14px">
+            <div><b>Misturar duas cores</b>
+              <small>Em vez de uma escala pronta, monte o degradê com as duas cores que você escolher.</small></div>
+            <button class="tog" id="cfgDuo" type="button" role="switch" aria-pressed="false" aria-label="Misturar duas cores"></button>
+          </div>
+          <div class="duorow" id="cfgDuoRow" hidden>
+            <label><span>Valor baixo</span><input type="color" id="cfgDuoA" value="#123f2a"></label>
+            <span class="duoarrow">→</span>
+            <label><span>Valor alto</span><input type="color" id="cfgDuoB" value="#84e79c"></label>
+            <button class="gh" id="cfgDuoSwap" type="button" title="Trocar as duas cores"><svg><use href="#s-swap"/></svg></button>
+          </div>
+
           <div class="cfgpreview" id="cfgPreview" aria-hidden="true"></div>
           <p class="cfghint" id="cfgScaleHint">—</p>
         </section>
@@ -378,11 +433,23 @@
                 a atenção vai para as poltronas fracas.</small></div>
             <button class="tog" id="cfgInvert" type="button" role="switch" aria-pressed="false" aria-label="Inverter escala"></button>
           </div>
-          <div class="cfgrow">
-            <div><b>Contraste reforçado</b>
-              <small>Aplica uma curva na escala para separar melhor o meio do campo quando quase tudo vende parecido.</small></div>
-            <button class="tog" id="cfgGamma" type="button" role="switch" aria-pressed="false" aria-label="Contraste reforçado"></button>
+
+          <div class="cfgrow col">
+            <div><b>Sensibilidade <span class="pill" id="cfgSensTxt">média</span></b>
+              <small id="cfgSensHint">Quanto maior, mais a cor muda entre poltronas com valores próximos.</small></div>
+            <input id="cfgSens" type="range" min="0" max="100" step="1" value="45" aria-label="Sensibilidade">
           </div>
+
+          <div class="cfgrow col">
+            <div><b>Referência da escala</b>
+              <small id="cfgSpanHint">—</small></div>
+            <div class="segs" id="cfgSpan" role="group" aria-label="Referência da escala">
+              <button type="button" data-span="zero" class="on">0 → máximo</button>
+              <button type="button" data-span="minmax">mínimo → máximo</button>
+              <button type="button" data-span="rank">posição no ranking</button>
+            </div>
+          </div>
+
           <div class="cfgrow">
             <div><b>Marcar o top 5 no mapa</b>
               <small>Contorno neutro em volta das cinco poltronas do ranking ativo.</small></div>
