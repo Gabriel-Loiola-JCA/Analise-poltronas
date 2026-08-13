@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="description" content="Estudo de poltronas · ordem de compra, antecedência, mapa de calor configurável e simulação de preço. Roda 100% no navegador.">
+<meta name="author" content="Gabriel Loiola">
+<meta name="theme-color" content="#000000">
+<title>Estudo de Poltronas</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="preload" href="./assets/css/app.css" as="style">
+<link rel="stylesheet" href="./assets/css/app.css">
+</head>
+<body>
+<div id="prog"></div>
+<svg class="sprite" aria-hidden="true">
+  <symbol id="s-bus" viewBox="0 0 24 24"><path d="M8 6v6M16 6v6M2 12h19.6M18 18h3s.5-1.7.5-6-1-7.2-1-7.2C18.4 3.6 15.8 3 12 3s-6.4.6-8.5 1.8c0 0-1 2.9-1 7.2S3 18 3 18h3"/><path d="M6 18h12M7 18v2M17 18v2"/></symbol>
+  <symbol id="s-up" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="s-dn" viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="s-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="s-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="s-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></symbol>
+  <symbol id="s-arrow" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="s-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+  <symbol id="s-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="s-window" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 12h18"/></symbol>
+  <symbol id="s-aisle" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M8 7 12 3l4 4M8 17l4 4 4-4"/></symbol>
+  <symbol id="s-stairs" viewBox="0 0 24 24"><path d="M3 21h4v-4h4v-4h4V9h4V5h3"/></symbol>
+  <symbol id="s-wc" viewBox="0 0 24 24"><path d="M7 3v6M4 6h6M7 9v12M17 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM17 8l-3 7h6l-3-7zM17 15v6"/></symbol>
+  <symbol id="s-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="s-hist" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></symbol>
+  <symbol id="s-sim" viewBox="0 0 24 24"><path d="M3 20h18M6 20V10M11 20V4M16 20v-7M21 20V8"/></symbol>
+  <symbol id="s-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol>
+  <symbol id="s-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="s-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5"/></symbol>
+  <symbol id="s-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 5 8.9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9.5a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="s-swap" viewBox="0 0 24 24"><path d="M7 4v13M4 14l3 3 3-3M17 20V7M14 10l3-3 3 3"/></symbol>
+  <symbol id="s-drop" viewBox="0 0 24 24"><path d="M12 2.7 6.5 9.4a7 7 0 1 0 11 0z"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <span class="brand"><span class="dot"></span>Estudo de Poltronas <small id="hstatus">· pronto</small></span>
+    <div class="hactions">
+      <button class="gh dash" id="btnSim" type="button" title="Simular valores"><svg><use href="#s-sim"/></svg><span class="full">Simular valores</span><span class="short">Simular</span></button>
+      <button class="gh dash" id="btnSave" type="button" title="Salvar estudo"><svg><use href="#s-save"/></svg><span class="full">Salvar estudo</span><span class="short">Salvar</span></button>
+      <button class="gh" id="btnHist" type="button" title="Histórico"><svg><use href="#s-hist"/></svg><span class="full">Histórico</span><span class="short">Hist.</span></button>
+      <button class="gh dash" id="btnXls" type="button" title="Exportar XLSX"><svg><use href="#s-dn"/></svg><span class="short">XLSX</span></button>
+      <button class="gh dash" id="btnPdf" type="button" title="Exportar PDF"><svg><use href="#s-dn"/></svg><span class="short">PDF</span></button>
+      <button class="gh dash" id="btnReset" type="button" title="Nova análise"><svg><use href="#s-refresh"/></svg><span class="full">Nova análise</span><span class="short">Nova</span></button>
+      <button class="gh icon" id="btnCfg" type="button" aria-label="Ajustes" title="Ajustes"><svg><use href="#s-cog"/></svg></button>
+      <button class="gh icon" id="btnTheme" type="button" aria-label="Alternar tema"><svg id="themeIcon"><use href="#s-sun"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+<section class="enter" id="enter">
+  <div>
+    <span class="lbl">Inteligência comercial · precificação por evidência</span>
+    <h1>Quais poltronas <b>vendem antes — e primeiro.</b></h1>
+    <p class="lead">Solte o CSV de vendas: o painel reconstrói cada viagem, ordena as compras, desenha o mapa de calor sobre a planta do veículo e simula o ganho de um reajuste. Tudo no seu navegador.</p>
+    <div class="gloss">
+      <span class="term" data-info="advance">antecedência</span>
+      <span class="term" data-info="rank">rank médio</span>
+      <span class="term" data-info="pct">percentil</span>
+      <span class="term" data-info="coverage">cobertura</span>
+      <span class="term" data-info="heat">mapa de calor</span>
+      <span class="term" data-info="score">índice</span>
+      <span class="term" data-info="sim">simulação</span>
+    </div>
+  </div>
+  <div>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Selecionar CSV">
+      <svg class="big"><use href="#s-up"/></svg>
+      <span class="lbl" style="color:var(--acc)">Arquivo de vendas</span>
+      <h2>Solte um ou mais CSVs</h2>
+      <p>Vírgula ou ponto e vírgula · UTF-8 ou Windows-1252 · arquivos grandes.</p>
+      <button class="gh solid" id="btnPick" type="button">Selecionar CSV</button>
+      <input id="file" type="file" accept=".csv,.txt,text/csv" multiple hidden>
+      <button class="linkish" id="btnDemo" type="button">Abrir demonstração</button>
+    </div>
+    <div class="entergrid">
+      <div><b>Poltrona · venda · viagem</b><small>colunas obrigatórias</small></div>
+      <div><b>Serviço · classe · canal</b><small>ativam planta e filtros</small></div>
+      <div><b>Receita</b><small>alimenta a simulação de preço</small></div>
+      <div><b>Histórico local</b><small>seus estudos ficam salvos no navegador</small></div>
+    </div>
+  </div>
+</section>
+</div>
+
+<div class="wrap" id="dash" hidden>
+
+  <div class="deck">
+    <div class="deckrow">
+      <div class="src"><svg><use href="#s-file"/></svg><div><b id="srcName">—</b><span id="srcMeta">—</span></div></div>
+      <div class="fld"><label for="from">De</label><input id="from" type="date"></div>
+      <div class="fld"><label for="to">Até</label><input id="to" type="date"></div>
+      <div class="fld"><label for="minN">Amostra mín. <button class="i" data-info="sample" type="button" aria-label="Amostra mínima">i</button></label><input id="minN" type="number" min="1" max="9999" step="1"></div>
+      <div class="fld"><label for="layout">Planta <button class="i" data-info="layout" type="button" aria-label="Planta">i</button></label><select id="layout"></select></div>
+      <div class="deckbtns"><button class="gh" id="btnMore" type="button">+ Filtros</button><button class="gh solid" id="btnApply" type="button">Aplicar</button></div>
+    </div>
+    <div class="deckrow more" id="moreRow" hidden>
+      <div class="fld"><label for="fService">Serviço</label><select id="fService"></select></div>
+      <div class="fld"><label for="fChannel">Canal de venda</label><select id="fChannel"></select></div>
+      <div class="fld"><label for="fClass">Classe</label><select id="fClass"></select></div>
+      <div class="fld"><label for="fWeek">Dia da semana</label><select id="fWeek"></select></div>
+      <div class="fld"><label for="fRoute">Trecho</label><select id="fRoute"></select></div>
+      <div class="fld"><label for="fOcc">Ocupação mínima da viagem</label><select id="fOcc"></select></div>
+      <div class="fld"><label for="fLead">Janela de antecedência</label><select id="fLead"></select></div>
+      <div class="deckbtns"><button class="gh" id="btnClear" type="button">Limpar filtros</button></div>
+    </div>
+  </div>
+
+  <section id="secResumo">
+    <div class="shead">
+      <div><span class="lbl">Visão executiva</span><h2>O que os dados <b>dizem</b></h2></div>
+      <div class="switch" id="rankSwitch" role="tablist" aria-label="Ranking">
+        <button type="button" data-rank="advance" class="on" role="tab" aria-selected="true">Maior antecedência</button>
+        <button type="button" data-rank="first" role="tab" aria-selected="false">Vendem primeiro</button>
+        <button type="button" data-rank="volume" role="tab" aria-selected="false">Mais vendidas</button>
+      </div>
+    </div>
+    <article class="narr rv"><span class="mk">i</span><div><small>Leitura principal</small><p id="narr">—</p><p class="sub" id="narrSub"></p></div></article>
+    <div class="kpis rv" id="kpis"></div>
+  </section>
+
+  <section id="secTop">
+    <div class="shead">
+      <div><span class="lbl" id="topKicker">Top 5</span><h2 id="topTitle">Top 5</h2><p id="topLead">—</p></div>
+      <button class="gh" id="btnSim2" type="button"><svg><use href="#s-sim"/></svg>Simular reajuste neste top</button>
+    </div>
+    <div class="podium rv" id="podium"></div>
+  </section>
+
+  <section id="secMapa">
+    <div class="shead">
+      <div><span class="lbl" id="deckBadge">Planta</span><h2>Mapa de calor<button class="i" data-info="heat" type="button" aria-label="Mapa de calor">i</button></h2><p id="mapDesc">—</p></div>
+    </div>
+    <div class="mapwrap rv">
+      <div class="stage">
+        <div class="mapbar">
+          <div class="metric" id="metricSwitch" role="group" aria-label="Métrica">
+            <button type="button" data-metric="volume" class="on">Volume</button>
+            <button type="button" data-metric="early">Vende primeiro</button>
+            <button type="button" data-metric="lead">Antecedência</button>
+            <button type="button" data-metric="first">1ª escolha</button>
+            <button type="button" data-metric="revenue">Receita</button>
+            <button type="button" data-metric="score">Índice</button>
+          </div>
+          <div class="pal" id="palPick" role="group" aria-label="Cores do mapa">
+            <span class="sep" data-fixed></span>
+            <button class="tool" id="btnInvert" type="button" data-fixed aria-pressed="false"
+              title="Inverter a escala: quem vende mais fica quase transparente"><svg><use href="#s-swap"/></svg>Inverter</button>
+            <button class="tool" id="btnMapCfg" type="button" data-fixed title="Ajustes do mapa de calor"><svg><use href="#s-cog"/></svg></button>
+          </div>
+        </div>
+        <div class="orient"><span>Frente</span><span id="orientTop">—</span><span>Fundo</span></div>
+        <div class="busrow">
+          <div class="rail" id="rail"></div>
+          <div class="bus" id="bus">
+            <div class="cab"><svg><use href="#s-bus"/></svg><span>Frente</span></div>
+            <div class="grid" id="seatGrid"></div>
+            <div class="rear" id="rear"></div>
+          </div>
+        </div>
+        <div class="orient bot"><span>Frente</span><span>Lado do motorista</span><span>Fundo</span></div>
+        <div class="legend">
+          <span id="legLow">—</span><div class="track" id="legTrack"></div><span id="legHigh">—</span>
+          <div class="keys">
+            <em><b class="t5"></b><span id="legTop5">Top 5</span></em>
+            <em><svg><use href="#s-window"/></svg>Janela</em>
+            <em><svg><use href="#s-aisle"/></svg>Corredor</em>
+            <em><b class="lw"></b>Abaixo da amostra mínima</em>
+          </div>
+        </div>
+      </div>
+      <aside class="insp" id="insp" aria-live="polite"></aside>
+    </div>
+  </section>
+
+  <section id="secGraf">
+    <div class="shead">
+      <div><span class="lbl">Diagnóstico</span><h2>Volume <b>não é</b> precocidade</h2></div>
+    </div>
+    <div class="charts rv">
+      <article class="chart">
+        <h3>Ritmo de compra<button class="i" data-info="chartLead" type="button" aria-label="Explicar">i</button></h3>
+        <p class="hint">Primeiras compras por faixa de dias antes da partida.</p>
+        <div id="chLead"></div>
+        <div class="chartkey"><em><b style="background:var(--acc)"></b>Top 5</em><em><b style="background:var(--dim);opacity:.42"></b>Todas</em></div>
+      </article>
+      <article class="chart">
+        <h3>Cobertura × precocidade<button class="i" data-info="chartScatter" type="button" aria-label="Explicar">i</button></h3>
+        <p class="hint">Bolha maior = mais viagens sustentando o ponto.</p>
+        <div id="chScatter"></div>
+      </article>
+      <article class="chart">
+        <h3 id="chRankTitle">Top 10</h3>
+        <p class="hint" id="chRankHint">—</p>
+        <div id="chRank"></div>
+      </article>
+    </div>
+  </section>
+
+  <section id="secTabela">
+    <div class="shead">
+      <div><span class="lbl">Base auditável</span><h2>Todas as poltronas</h2><p>Clique no cabeçalho para ordenar, na linha para abrir no mapa.</p></div>
+      <label class="srch"><svg><use href="#s-search"/></svg><input id="seatSearch" type="search" inputmode="numeric" placeholder="Buscar poltrona" aria-label="Buscar poltrona"></label>
+    </div>
+    <div class="tbl rv" id="table"></div>
+  </section>
+
+  <section id="secMetodo">
+    <div class="shead">
+      <div><span class="lbl">Transparência</span><h2>Como cada número <b>é calculado</b></h2></div>
+    </div>
+    <div class="method rv" id="method"></div>
+  </section>
+
+  <section id="secQual">
+    <div class="shead">
+      <div><span class="lbl">Governança</span><h2>Qualidade <b>e limites</b></h2></div>
+    </div>
+    <div class="qual rv" id="qual"></div>
+    <div class="qnotes rv" id="qnotes"></div>
+  </section>
+
+  <footer>
+    <span class="made"><b>Criado por Gabriel Loiola</b></span>
+    <span id="ver">v4.0</span>
+  </footer>
+</div>
+</main>
+
+<!-- ══════ SIMULADOR ══════ -->
+<dialog class="md" id="dlgSim" aria-labelledby="simTitle">
+  <div class="mdshell">
+    <div class="mdhead">
+      <div><span class="lbl" style="color:var(--acc)">Simulação de receita</span><h2 id="simTitle">Vamos simular <b>valores?</b></h2><p id="simSub">—</p></div>
+      <button class="mdx" data-close="dlgSim" type="button" aria-label="Fechar"><svg><use href="#s-x"/></svg></button>
+    </div>
+    <div class="mdbody">
+      <div class="simgrid">
+        <div class="simctl">
+          <div class="box">
+            <span class="lbl">Poltronas do teste</span>
+            <div class="chips" id="simScope">
+              <button class="chip on" data-scope="3" type="button">Top 3</button>
+              <button class="chip" data-scope="5" type="button">Top 5</button>
+              <button class="chip" data-scope="10" type="button">Top 10</button>
+              <button class="chip" data-scope="one" type="button">Uma poltrona</button>
+            </div>
+            <div class="fld" style="margin-top:10px" id="simSeatWrap" hidden><label for="simSeat">Poltrona</label><select id="simSeat"></select></div>
+            <div class="fld" style="margin-top:10px"><label for="simRank">Critério do top <button class="i" data-info="simRank" type="button" aria-label="Critério">i</button></label>
+              <select id="simRank">
+                <option value="volume">Mais vendidas (receita)</option>
+                <option value="first">Vendem primeiro</option>
+                <option value="advance">Maior antecedência</option>
+                <option value="score">Índice de oportunidade</option>
+              </select>
+            </div>
+          </div>
+          <div class="box">
+            <span class="lbl">Aumento de preço</span>
+            <div class="rangeval"><b id="simPctTxt">+10%</b><span>sobre o preço médio pago</span></div>
+            <input id="simPct" type="range" min="0" max="60" step="1" value="10">
+            <div class="chips" style="margin-top:8px" id="simPreset">
+              <button class="chip" data-pct="5" type="button">5%</button>
+              <button class="chip on" data-pct="10" type="button">10%</button>
+              <button class="chip" data-pct="15" type="button">15%</button>
+              <button class="chip" data-pct="20" type="button">20%</button>
+              <button class="chip" data-pct="30" type="button">30%</button>
+            </div>
+          </div>
+          <div class="box">
+            <span class="lbl">Cenário de demanda <button class="i" data-info="simRet" type="button" aria-label="Retenção">i</button></span>
+            <div class="rangeval"><b id="simRetTxt">100%</b><span>da demanda mantida</span></div>
+            <input id="simRet" type="range" min="50" max="100" step="1" value="100">
+            <div class="chips" style="margin-top:8px" id="simScen">
+              <button class="chip" data-ret="85" type="button">Conservador</button>
+              <button class="chip" data-ret="93" type="button">Base</button>
+              <button class="chip on" data-ret="100" type="button">Otimista</button>
+            </div>
+          </div>
+          <div class="box">
+            <span class="lbl">Período</span>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="fld"><label for="simFrom">De</label><input id="simFrom" type="date"></div>
+              <div class="fld"><label for="simTo">Até</label><input id="simTo" type="date"></div>
+            </div>
+            <button class="gh" id="simReset" type="button" style="margin-top:9px;width:100%;justify-content:center">Usar o recorte do painel</button>
+          </div>
+        </div>
+        <div class="simout" id="simOut"></div>
+      </div>
+    </div>
+    <div class="mdfoot">
+      <button class="gh" id="simXls" type="button"><svg><use href="#s-dn"/></svg>Exportar cenário</button>
+      <button class="gh solid" data-close="dlgSim" type="button">Fechar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ══════ HISTÓRICO ══════ -->
+<dialog class="md" id="dlgHist" aria-labelledby="histTitle">
+  <div class="mdshell">
+    <div class="mdhead">
+      <div><span class="lbl" style="color:var(--acc)">Memória local</span><h2 id="histTitle">Histórico de <b>estudos</b></h2><p id="histSub">Salvos neste navegador — nada sai da máquina.</p></div>
+      <button class="mdx" data-close="dlgHist" type="button" aria-label="Fechar"><svg><use href="#s-x"/></svg></button>
+    </div>
+    <div class="mdbody">
+      <div class="histbar">
+        <label class="srch" style="width:100%"><svg><use href="#s-search"/></svg><input id="histQ" type="search" placeholder="Buscar por nome, fonte ou serviço" aria-label="Buscar"></label>
+        <div class="fld"><label for="histLayout">Planta</label><select id="histLayout"></select></div>
+        <div class="fld"><label for="histFrom">Salvo de</label><input id="histFrom" type="date"></div>
+        <div class="fld"><label for="histTo">Salvo até</label><input id="histTo" type="date"></div>
+        <div class="fld"><label for="histSort">Ordenar</label><select id="histSort">
+          <option value="date">Mais recentes</option><option value="name">Nome</option>
+          <option value="trips">Mais viagens</option><option value="rev">Maior receita</option></select></div>
+      </div>
+      <div id="histCharts"></div>
+      <div class="histlist" id="histList"></div>
+    </div>
+    <div class="mdfoot">
+      <button class="gh" id="histExport" type="button"><svg><use href="#s-dn"/></svg>Exportar histórico (XLSX)</button>
+      <button class="gh" id="histWipe" type="button">Limpar tudo</button>
+      <button class="gh solid" data-close="dlgHist" type="button">Fechar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ══════ SALVAR ══════ -->
+<dialog class="md" id="dlgSave" style="width:min(520px,calc(100% - 24px))" aria-labelledby="saveTitle">
+  <div class="mdshell">
+    <div class="mdhead">
+      <div><span class="lbl" style="color:var(--acc)">Salvar</span><h2 id="saveTitle">Que nome dar a <b>este estudo?</b></h2><p>Fica salvo no navegador com o recorte, os filtros e todas as métricas.</p></div>
+      <button class="mdx" data-close="dlgSave" type="button" aria-label="Fechar"><svg><use href="#s-x"/></svg></button>
+    </div>
+    <div class="mdbody">
+      <input class="namefield" id="saveName" type="text" maxlength="80" placeholder="Ex.: SP × Rio · semi-leito · 1º semestre">
+      <p style="color:var(--dim);font-size:11px;margin-top:10px" id="saveHint">—</p>
+    </div>
+    <div class="mdfoot">
+      <button class="gh" data-close="dlgSave" type="button">Cancelar</button>
+      <button class="gh solid" id="saveGo" type="button"><svg><use href="#s-save"/></svg>Salvar estudo</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ══════ AJUSTES ══════ -->
+<dialog class="md" id="dlgCfg" style="width:min(760px,calc(100% - 24px))" aria-labelledby="cfgTitle">
+  <div class="mdshell">
+    <div class="mdhead">
+      <div><span class="lbl">Preferências</span><h2 id="cfgTitle">Ajustes do <b>painel</b></h2>
+        <p>Ficam guardados neste navegador e valem para os próximos estudos.</p></div>
+      <button class="mdx" data-close="dlgCfg" type="button" aria-label="Fechar"><svg><use href="#s-x"/></svg></button>
+    </div>
+    <div class="mdbody">
+      <div class="cfg">
+
+        <section class="cfgbox">
+          <span class="lbl">Mapa de calor</span>
+          <p>A cor do painel é neutra de propósito: quem carrega significado é o mapa. Escolha aqui a escala.</p>
+          <div class="palgrid" id="cfgPal"></div>
+          <div class="cfgpreview" id="cfgPreview" aria-hidden="true"></div>
+          <p class="cfghint" id="cfgScaleHint">—</p>
+        </section>
+
+        <section class="cfgbox">
+          <span class="lbl">Escala</span>
+          <div class="cfgrow">
+            <div><b>Inverter a intensidade</b>
+              <small>Normal: quem vende mais recebe a cor cheia. Invertido: quem vende mais fica quase transparente e
+                a atenção vai para as poltronas fracas.</small></div>
+            <button class="tog" id="cfgInvert" type="button" role="switch" aria-pressed="false" aria-label="Inverter escala"></button>
+          </div>
+          <div class="cfgrow">
+            <div><b>Contraste reforçado</b>
+              <small>Aplica uma curva na escala para separar melhor o meio do campo quando quase tudo vende parecido.</small></div>
+            <button class="tog" id="cfgGamma" type="button" role="switch" aria-pressed="false" aria-label="Contraste reforçado"></button>
+          </div>
+          <div class="cfgrow">
+            <div><b>Marcar o top 5 no mapa</b>
+              <small>Contorno neutro em volta das cinco poltronas do ranking ativo.</small></div>
+            <button class="tog" id="cfgTop5" type="button" role="switch" aria-pressed="true" aria-label="Marcar top 5"></button>
+          </div>
+        </section>
+
+        <section class="cfgbox">
+          <span class="lbl">Interface</span>
+          <div class="cfgrow">
+            <div><b>Tingir a interface com a paleta</b>
+              <small>Desligado, o site fica em preto, branco e grafite. Ligado, botões, barras e destaques adotam a cor do mapa.</small></div>
+            <button class="tog" id="cfgTint" type="button" role="switch" aria-pressed="false" aria-label="Tingir a interface"></button>
+          </div>
+          <div class="cfgrow">
+            <div><b>Tema claro</b><small>Também respeita o botão de sol/lua no cabeçalho.</small></div>
+            <button class="tog" id="cfgLight" type="button" role="switch" aria-pressed="false" aria-label="Tema claro"></button>
+          </div>
+          <div class="cfgrow">
+            <div><b>Brilho de fundo</b><small>Halo suave atrás do conteúdo. Desligue para leitura e impressão mais secas.</small></div>
+            <button class="tog" id="cfgGlow" type="button" role="switch" aria-pressed="true" aria-label="Brilho de fundo"></button>
+          </div>
+        </section>
+
+        <section class="cfgbox">
+          <span class="lbl">Exportações</span>
+          <div class="cfgrow">
+            <div><b>Usar a paleta do mapa no PDF</b>
+              <small>Desligado, o PDF sai em escala de cinza — melhor para impressão em preto e branco.</small></div>
+            <button class="tog" id="cfgPdfColor" type="button" role="switch" aria-pressed="true" aria-label="Cor no PDF"></button>
+          </div>
+          <div class="cfgrow">
+            <div><b>Dados guardados</b><small id="cfgStorage">—</small></div>
+            <button class="gh" id="cfgClear" type="button">Limpar preferências</button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+    <div class="mdfoot">
+      <button class="gh solid" data-close="dlgCfg" type="button">Concluído</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="load" id="load" hidden role="status" aria-live="polite">
+  <div class="ring"></div>
+  <span class="lbl" id="loadPhase">Leitura</span>
+  <h2 id="loadTitle">Processando…</h2>
+  <p id="loadDetail">—</p>
+  <div class="track"><i id="loadBar"></i></div>
+  <span class="lbl" id="loadPct">0%</span>
+</div>
+
+<div id="tip" role="tooltip" hidden></div>
+<div class="toasts" id="toasts"></div>
+<button id="totop" type="button" aria-label="Topo"><svg><use href="#s-arrow"/></svg></button>
+
+<script src="./assets/js/engine.js" defer></script>
+<script src="./assets/js/app.js" defer></script>
+<script>
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
+  addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
