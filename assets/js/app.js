@@ -20,8 +20,9 @@ const DOW = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sába
 const st = { ds: null, an: null, metric: 'volume', rank: 'advance', seat: null, layout: '',
   pal: 'verde', sort: { k: 'avgPct', asc: true }, sim: null, hist: [],
   /* preferências visuais — ver dlgCfg */
-  inv: false, top5: true, tint: false, glow: true, pdfColor: true,
-  sens: 45, span: 'zero', duo: false, duoA: '#123f2a', duoB: '#84e79c', onlyTop: false };
+  inv: false, top5: true, glow: true, pdfColor: true,
+  sens: 45, span: 'zero', duo: false, duoA: '#123f2a', duoB: '#84e79c', onlyTop: false,
+  resale: false };
 
 /* ══════════════════════════════════════════════════════════════
    PALETAS DO MAPA DE CALOR
@@ -127,10 +128,21 @@ const INFO = {
   ticket: ['Ticket médio', 'Receita dividida pelo número de bilhetes válidos do recorte.', ''],
   conf: ['Confiança', 'Alta: passou do corte e aparece em mais da metade das viagens. Adequada: passou do corte. Baixa: metade do corte. Insuficiente: não sustenta decisão.', ''],
   chartLead: ['Ritmo de compra', 'Cada barra é uma faixa de dias antes da partida. A clara mostra todas as compras; a destacada mostra só o top 5 ativo. Destaque à direita = essas poltronas saem antes.', ''],
-  chartScatter: ['Cobertura × precocidade', 'Horizontal: em quantas viagens vendeu. Vertical: quão cedo sai na fila. O quadrante superior direito reúne as candidatas fortes.', ''],
-  sim: ['Simulação de valores', 'Aplica um aumento percentual sobre a receita observada das poltronas escolhidas e mostra o ganho no período, por viagem e projetado em 12 meses — com a perda de vendas que o aumento suportaria.', 'nova receita = receita × (1 + aumento) × retenção'],
-  simRank: ['Critério do top', 'Define quais poltronas entram no cenário: as de maior receita, as que vendem primeiro, as de maior antecedência ou as de maior índice.', ''],
-  simRet: ['Cenário de demanda', 'Quantas das vendas de hoje sobreviveriam ao aumento. Exemplo: 100 pessoas compram a poltrona 19 por mês; com retenção de 93%, 93 continuariam comprando pelo preço novo e 7 procurariam outro horário, outra poltrona ou outra empresa. Otimista (100%) assume que ninguém desiste — é o teto do que se pode esperar, útil como limite, não como meta. Base (93%) e Conservador (85%) são pontos de partida razoáveis para discutir. Este número não sai dos dados: não há teste A/B no histórico de vendas, então ele é uma premissa sua — e fica explícito justamente por isso.', 'retenção = vendas após o aumento ÷ vendas atuais']
+  chartSeats: ['O salão enchendo', 'A mesma linha do tempo, agora sobre a planta. Cada poltrona acende no ponto do prazo em que metade das suas compras já tinha acontecido — a mediana da antecedência, não a média, para que duas compras muito antecipadas não a façam acender cedo demais. Arraste a barra para parar em qualquer momento. Poltronas sem venda no recorte ficam apagadas o tempo todo.', 'acende quando: dias até a partida = mediana da antecedência'],
+  chartFill: ['Como o ônibus enche', 'A curva acumula as vendas da esquerda (mais de dois meses antes) até a partida, à direita. Cada ponto responde: nesta altura do prazo, que fatia das vendas daquele grupo já tinha acontecido? A linha tracejada é o total do veículo, para comparação. Se a linha cheia sobe antes da tracejada, aquelas poltronas esgotam mais cedo que a média — e é justamente nelas que um preço maior tem chance de passar.', ''],
+  sim: ['Receita não cobrada', 'Pega os bilhetes que JÁ foram vendidos e os remarca por um preço maior. Não estima procura futura nem quantas pessoas desistiriam: mostra quanto teria entrado a mais se aquelas mesmas passagens tivessem saído mais caras. É a conta do que ficou na mesa.', 'não cobrado = receita observada × aumento'],
+  simRank: ['Critério do top', 'Define quais poltronas entram na conta: as de maior receita, as que vendem primeiro, as de maior antecedência ou as de maior índice.', ''],
+
+  /* ── governança: o que cada contador de qualidade significa ── */
+  qRaw: ['Linhas lidas', 'Total de linhas do arquivo, incluindo cabeçalho descartado, linhas vazias e tudo o que foi recusado depois. É o denominador: compare os outros números com este para saber se o descarte foi pequeno ou preocupante.', ''],
+  qValid: ['Eventos válidos', 'Linhas que passaram por todas as checagens e alimentam de fato o estudo. Se estiver muito abaixo das linhas lidas, algum contador amarelo abaixo explica para onde foi o resto.', 'aproveitamento = válidos ÷ linhas lidas'],
+  qSeat: ['Poltronas não numéricas', 'Linhas cuja poltrona não é um número de 1 a 99 — códigos como “P200”, campos vazios ou textos. São descartadas porque não há como colocá-las na planta do veículo. Um punhado é normal; muitas indicam que a coluna de poltrona veio noutro formato.', ''],
+  qOff: ['Fora da planta', 'Vendas de poltronas que existem no arquivo mas não na planta escolhida — por exemplo, a poltrona 53 num veículo executivo de 46 lugares. Se o número for alto, a planta detectada está errada: troque no filtro e o mapa se refaz.', ''],
+  qAfter: ['Vendas após a partida', 'Linhas em que a compra foi registrada depois do horário em que o veículo já saiu. São isoladas porque quebrariam o estudo: a antecedência sairia negativa e a poltrona entraria como última na fila de compras, sujando o rank de todas as outras da viagem. Causas comuns: venda embarcada lançada depois, regularização de bilhete, ou hora de partida zerada no CSV.', ''],
+  qNoDate: ['Sem data de venda', 'Linhas sem data ou hora de compra utilizável. Sem esse instante não dá para ordenar a fila da viagem nem calcular antecedência, que são o coração do estudo — por isso saem.', ''],
+  qDup: ['Duplicados', 'Mesma venda aparecendo mais de uma vez: mesmo bilhete, mesma poltrona, mesma viagem e mesmo instante. Contam uma vez só. Costumam vir de exportações sobrepostas ou de carregar dois arquivos com período em comum — nesse caso é justamente o que se espera.', ''],
+  qResale: ['Revendas ignoradas', 'A mesma poltrona comprada mais de uma vez na mesma viagem — tipicamente uma venda cancelada e outra pessoa comprando o lugar depois. Vale SEMPRE a primeira compra, e isso não se aplica só à ordem e à antecedência: a receita dessas repetições também fica de fora. Somá-las contaria como se o lugar tivesse sido ocupado duas vezes, inflando receita, ticket médio e a conta de receita não cobrada. O valor deixado de fora aparece na nota abaixo.', ''],
+  qTies: ['Empates na 1ª', 'Viagens em que duas ou mais poltronas foram compradas no mesmo instante e disputam a primeira posição. Nesses casos ninguém leva o crédito inteiro: ele é rateado entre as empatadas. Muito comum quando o sistema grava só a hora cheia, sem minutos.', 'crédito = 1 ÷ nº de empatadas']
 };
 const tip = $('#tip'); let tipOwner = null;
 function showTip(el) {
@@ -163,22 +175,12 @@ function setTheme(t, silent) {
   if (!silent) DB.setPref('tema', t);
   if (st.an) { paintSeats(); drawCharts(); renderTable(); renderMethod(); if ($('#dlgSim').open) renderSim(); }
 }
-/* A cor da paleta é publicada em --heat-*, sempre. A interface só a
-   adota se o usuário ligar "tingir a interface" (data-tint=on). */
+/* A paleta do mapa fica CONFINADA ao mapa. O acento da interface é
+   neutro e não muda com ela — trocar de escala não deve repintar
+   botões, barras e destaques. */
 function applyAccent() {
-  const sp = PALS[st.pal][dark() ? 'dark' : 'light'];
-  /* para tingir a interface vale sempre a parada mais saturada,
-     mesmo com a escala invertida — senão o tema ficaria lavado */
-  const hi = st.duo ? st.duoB : sp[3];
-  const r = document.documentElement.style;
-  r.setProperty('--heat-hi', hi);
-  r.setProperty('--heat-ink', ink(hex(hi)));
-  r.setProperty('--heat-dim', hexToRgba(hi, dark() ? .16 : .14));
-  r.setProperty('--heat-soft', hexToRgba(hi, dark() ? .07 : .05));
-  document.documentElement.dataset.tint = st.tint ? 'on' : 'off';
   document.documentElement.dataset.glow = st.glow ? 'on' : 'off';
 }
-function hexToRgba(h, a) { const c = hex(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
 /* Redesenha o que depende da escala. Agrupado em um frame para não
    disparar vários reflows quando o usuário arrasta a sensibilidade. */
 let repaintReq = 0;
@@ -241,12 +243,12 @@ function buildPal() {
   st.pal = PALS[p.paleta] ? p.paleta : 'verde';
   st.inv = p.inverter === true;
   st.top5 = p.marcarTop5 !== false;
-  st.tint = p.tingir === true;
   st.glow = p.brilho !== false;
   st.pdfColor = p.pdfCor !== false;
   st.sens = Number.isFinite(+p.sensibilidade) ? +p.sensibilidade : 45;
   st.span = ['zero', 'minmax', 'rank'].includes(p.referencia) ? p.referencia : 'zero';
   st.duo = p.duo === true;
+  st.resale = p.contarRevendas === true;
   if (p.duoA) st.duoA = p.duoA;
   if (p.duoB) st.duoB = p.duoB;
   applyAccent();
@@ -292,8 +294,17 @@ function renderCfgPreview() {
 function syncCfg() {
   const set = (id, v) => { const el = $(id); if (el) el.setAttribute('aria-pressed', String(!!v)); };
   set('#cfgInvert', st.inv); set('#cfgTop5', st.top5);
-  set('#cfgTint', st.tint); set('#cfgLight', !dark()); set('#cfgGlow', st.glow);
-  set('#cfgPdfColor', st.pdfColor); set('#cfgDuo', st.duo);
+  set('#cfgLight', !dark()); set('#cfgGlow', st.glow);
+  set('#cfgPdfColor', st.pdfColor); set('#cfgDuo', st.duo); set('#cfgResale', st.resale);
+  const rh = $('#cfgResaleHint');
+  if (rh) {
+    const s = st.an && st.an.summary;
+    rh.textContent = !s ? 'Carregue um arquivo para ver o efeito desta escolha.'
+      : !s.resales ? 'Este recorte não tem nenhuma poltrona comprada duas vezes na mesma viagem — a escolha não muda nada aqui.'
+        : st.resale
+          ? `Contando revendas: ${int(s.resales)} ${pl(s.resales, 'compra repetida', 'compras repetidas')} somam ${brl0(s.resaleRev)} à receita.`
+          : `Sem revendas: ${brl0(s.resaleRev)} de ${int(s.resales)} ${pl(s.resales, 'compra repetida', 'compras repetidas')} ficam de fora.`;
+  }
   $('#cfgSens').value = st.sens; $('#mapSens').value = st.sens;
   $('#cfgSensTxt').textContent = SENS_TXT(st.sens);
   $('#mapSensTxt').textContent = SENS_TXT(st.sens);
@@ -320,11 +331,13 @@ function openCfg() {
 }
 function closeCfg() {
   const d = $('#dlgCfg');
+  document.body.classList.remove('drawer-open');   /* sempre, mesmo se já fechado */
   if (!d.open) return;
   d.classList.add('closing');
-  document.body.classList.remove('drawer-open');
   setTimeout(() => { d.close(); d.classList.remove('closing'); }, 250);
 }
+/* rede de segurança: qualquer fechamento do dialog solta o conteúdo */
+$('#dlgCfg').addEventListener('close', () => document.body.classList.remove('drawer-open'));
 $('#btnCfg').addEventListener('click', openCfg);
 $('#btnMapCfg').addEventListener('click', openCfg);
 $('#dlgCfg').addEventListener('cancel', e => { e.preventDefault(); closeCfg(); });
@@ -384,8 +397,14 @@ $('#cfgDuoSwap').addEventListener('click', () => {
 $('#cfgTop5').addEventListener('click', () => {
   st.top5 = !st.top5; DB.setPref('marcarTop5', st.top5); syncCfg();
 });
-$('#cfgTint').addEventListener('click', () => {
-  st.tint = !st.tint; DB.setPref('tingir', st.tint); applyAccent(); syncCfg();
+$('#cfgResale').addEventListener('click', () => {
+  st.resale = !st.resale;
+  DB.setPref('contarRevendas', st.resale);
+  invalidateSim();
+  if (st.ds && st.an) apply(); else syncCfg();
+  setTimeout(syncCfg, 700);
+  toast(st.resale ? 'Contando revendas' : 'Só a primeira compra',
+    st.resale ? 'A receita passa a somar tudo o que foi cobrado.' : 'Cada poltrona conta uma vez por viagem.');
 });
 $('#cfgLight').addEventListener('click', () => { setTheme(dark() ? 'light' : 'dark'); applyAccent(); buildPal(); syncCfg(); });
 $('#cfgGlow').addEventListener('click', () => {
@@ -409,6 +428,7 @@ function syncActions() {
   const on = !!st.an;
   $$('.dash').forEach(b => { b.disabled = !on; b.setAttribute('aria-disabled', String(!on)); });
   $('#btnHist').disabled = false;
+  $('#fab').hidden = !on;   /* o botão de filtro só existe com base carregada */
   const t = $('#btnSim2'); if (t) t.disabled = !on;
   const a = $('#advSim'); if (a) a.disabled = !on;
   if (!on) $('#exportMenu').hidden = true;
@@ -427,11 +447,14 @@ function syncActions() {
 const LOADQ = { target: 0, shown: 0, timer: 0, t0: 0 };
 function load(t, d, p, ph) {
   const el = $('#load');
-  el.hidden = false; el.style.opacity = ''; el.style.transition = '';
+  el.hidden = false;
   $('#loadTitle').textContent = t || 'Processando…';
   $('#loadDetail').textContent = d || ''; if (ph) $('#loadPhase').textContent = ph;
   LOADQ.target = p == null ? 0 : p; LOADQ.shown = 0; LOADQ.t0 = Date.now();
   paintProg();
+  /* dois frames para o navegador registrar o estado inicial e a
+     transição de opacidade realmente acontecer */
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('on')));
   startProg();
 }
 function startProg() {
@@ -469,9 +492,8 @@ function unloadSmooth(minMs) {
     const done = () => {
       stopProg();
       const el = $('#load');
-      el.style.transition = 'opacity .3s var(--ease)';
-      el.style.opacity = '0';
-      setTimeout(() => { el.hidden = true; el.style.opacity = ''; el.style.transition = ''; res(); }, 310);
+      el.classList.remove('on');        /* desaparece por opacidade */
+      setTimeout(() => { el.hidden = true; res(); }, 460);
     };
     const wait = () => {
       const elapsed = Date.now() - LOADQ.t0;
@@ -481,7 +503,7 @@ function unloadSmooth(minMs) {
     wait();
   });
 }
-const unload = () => { stopProg(); const el = $('#load'); el.hidden = true; el.style.opacity = ''; el.style.transition = ''; };
+const unload = () => { stopProg(); const el = $('#load'); el.classList.remove('on'); el.hidden = true; };
 function toast(t, m, err) {
   const el = document.createElement('div');
   el.className = 'toast' + (err ? ' err' : '');
@@ -552,9 +574,10 @@ async function handle(files) {
    é o que permite filtrar por uma classe de veículo diferente sem
    o mapa esvaziar. */
 function opts(reset) {
-  if (reset) return { layout: st.layoutManual ? st.layout : null };
+  if (reset) return { layout: st.layoutManual ? st.layout : null, includeResales: st.resale };
   return {
     layout: st.layoutManual ? st.layout : null,
+    includeResales: st.resale,
     start: $('#from').value || null, end: $('#to').value || null,
     minTrips: Math.max(1, Number($('#minN').value) || 1),
     service: $('#fService').value || null, channel: $('#fChannel').value || null,
@@ -569,7 +592,16 @@ function run(reset) {
   const an = S.analyze(st.ds, opts(reset));
   st.an = an;
   st.layout = an.layout;   /* acompanha o que foi detectado no recorte */
-  $('#enter').hidden = true; $('#dash').hidden = false;
+  /* A troca entrada → painel acontece por trás do desfoque: o painel
+     nasce transparente e ganha corpo enquanto o overlay ainda cobre,
+     em vez de um piscar de uma tela para outra. */
+  if ($('#dash').hidden) {
+    $('#dash').classList.add('fading');
+    $('#enter').hidden = true; $('#dash').hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => $('#dash').classList.remove('fading')));
+  } else {
+    $('#enter').hidden = true; $('#dash').hidden = false;
+  }
   $('#resume').hidden = true;
   syncActions();
   /* o nome da base vive no deck de filtros, não no cabeçalho */
@@ -629,15 +661,42 @@ function activeList() {
 /* ── render ─────────────────────────────────────────── */
 function renderAll() {
   renderActiveFilters();
-  renderSource(); renderNarrative(); renderKpis(); renderAdvice(); renderPodium();
+  renderSource(); renderOrderWarn(); renderNarrative(); renderKpis(); renderAdvice(); renderPodium();
   renderMap(); drawCharts(); renderTable(); renderMethod(); renderQuality(); reveal();
 }
 function renderSource() {
   const a = st.an;
   $('#srcName').textContent = a.sourceName || 'Base';
   $('#srcMeta').textContent = `${dt(a.period.start)} a ${dt(a.period.end)} · ${int(a.period.tripCount)} viagens`;
-  $('#ver').textContent = `v${a.version} · ${S.LAYOUTS[a.layout].badge}`;
+  $('#ver').textContent = `v${a.version} · ${S.LAYOUTS[a.layout].badge}`
+    + (a.summary.includeResales ? ' · receita com revendas' : '');
   $('#deckBadge').textContent = S.LAYOUTS[a.layout].badge;
+}
+/* ══════════════════════════════════════════════════════════════
+   AVISO DE GRANULARIDADE
+   Muitos sistemas gravam a hora da venda sem os minutos. Quando isso
+   acontece, todas as compras da mesma hora chegam empatadas e a
+   ordem entre elas é desconhecida — o ranking "vende primeiro"
+   perde base na mesma proporção.
+
+   Não mexemos no cálculo: rank médio para empatados e crédito de
+   primeira rateado já é o tratamento estatístico correto. O que
+   faltava era dizer ao usuário quanto da ordem sobrou.
+   ══════════════════════════════════════════════════════════════ */
+function renderOrderWarn() {
+  const a = st.an, s = a.summary, q = a.quality || {};
+  const el = $('#orderWarn'); if (!el) return;
+  const mantida = s.orderKept == null ? 1 : s.orderKept;
+  const horaCheia = q.valid ? (q.coarse || 0) / q.valid : 0;
+  /* só avisa quando a perda é material */
+  if (mantida > .9 || horaCheia < .5) { el.hidden = true; return; }
+  el.hidden = false;
+  $('#orderWarnTxt').innerHTML =
+    `${pct(horaCheia, 0)} das vendas têm horário gravado só na hora cheia, sem minutos. `
+    + `Compras da mesma hora chegam empatadas: <b>${int(s.tiedSeats)}</b> de ${int(s.rankedSeats)} poltronas ficaram sem ordem definida, `
+    + `e <b>${pct(1 - mantida, 0)}</b> da informação de ordem se perdeu. `
+    + `Os empates são rateados — ninguém leva crédito de primeira sozinho —, mas prefira <b>Maior antecedência</b> para decidir: `
+    + `ela é medida em dias e não depende do minuto da compra.`;
 }
 function renderNarrative() {
   const a = st.an, p = a.period, c = a.champFirst, l = a.leadTop, m = a.mostSold;
@@ -702,8 +761,8 @@ function renderAdvice() {
       : Math.max(1, Math.round(brutoAbs * 2) / 2);
 
   const r = S.simulate(a, adv.mode === 'abs'
-    ? { mode: 'abs', abs: absSug, ret: 100, seats }
-    : { mode: 'pct', pct: pctSug, ret: 100, seats });
+    ? { mode: 'abs', abs: absSug, seats }
+    : { mode: 'pct', pct: pctSug, seats });
 
   const nomes = seats.map(s => s.seat);
   const lista = nomes.length > 1
@@ -713,26 +772,27 @@ function renderAdvice() {
     ? `<b>${brl0(absSug)}</b> por bilhete`
     : `<b>${pctSug}%</b> no preço`;
   const equiv = adv.mode === 'abs'
-    ? `cerca de ${pct(r.pctEfetivo, 1)} sobre o ticket médio delas`
-    : `algo perto de ${brl(brutoAbs)} por bilhete`;
+    ? `${pct(r.pctEfetivo, 1)} sobre o ticket médio delas`
+    : `${brl(r.porBilhete)} por bilhete`;
 
   $('#adviceText').innerHTML =
-    `Vale testar um aumento nas poltronas <b>${lista}</b> — são as que vendem mais cedo e aparecem em mais viagens, ` +
-    `então aguentam melhor um ajuste. Subindo ${ajuste} (${equiv}), o ganho seria de ` +
-    `<b>${brl0(r.perMonth)}</b> em um mês, <b>${brl0(r.perHalf)}</b> em seis meses e <b>${brl0(r.perYear)}</b> em um ano.`;
+    `As poltronas <b>${lista}</b> vendem mais cedo e aparecem em mais viagens — são as candidatas naturais a um preço maior. ` +
+    `Nos <b>${int(a.period.calendarDays)} dias</b> deste recorte, esses <b>${int(r.tickets)} bilhetes</b> já vendidos ` +
+    `teriam rendido <b>${brl0(r.delta)}</b> a mais com ${ajuste} (${equiv}). ` +
+    `No mesmo ritmo, isso é <b>${brl0(r.perMonth)}</b> por mês e <b>${brl0(r.perYear)}</b> por ano.`;
 
   $('#adviceNums').innerHTML = [
-    ['Em 1 mês', brl0(r.perMonth)],
+    ['No recorte', brl0(r.delta)],
+    ['Por bilhete', brl(r.porBilhete)],
+    ['Por mês', brl0(r.perMonth)],
     ['Em 6 meses', brl0(r.perHalf)],
-    ['Em 12 meses', brl0(r.perYear)],
-    ['No recorte analisado', brl0(r.delta)],
-    ['Margem de segurança', pct(r.breakEven, 1)]
+    ['Em 12 meses', brl0(r.perYear)]
   ].map(([k, v]) => `<div><small>${esc(k)}</small><b>${v}</b></div>`).join('');
 
   $('#adviceCaveat').textContent =
-    `Projeção linear a partir de ${int(a.period.calendarDays)} dias observados, sem queda de demanda. ` +
-    `Na prática dá para perder até ${pct(r.breakEven, 1)} das vendas dessas poltronas antes de empatar com a receita de hoje. ` +
-    `Ajuste o cenário no simulador antes de levar o número adiante.`;
+    `O valor do recorte é fato: são passagens já vendidas, remarcadas pelo preço maior. ` +
+    `Mês e ano apenas estendem o ritmo observado e supõem a mesma procura — ` +
+    `um aumento real pode afastar parte dos passageiros.`;
 
   adv.last = { seats, absSug, pctSug };
 }
@@ -921,7 +981,7 @@ function renderInspector() {
 
 /* ── gráficos ───────────────────────────────────────── */
 const SHORT = ['≤1d', '1–2d', '2–3d', '3–5d', '5–7d', '1–2sem', '2–4sem', '1–2mês', '2mês+'];
-function drawCharts() { chartLead(); chartScatter(); chartRank(); }
+function drawCharts() { chartLead(); chartFill(); buildSeatFill(); chartRank(); }
 function chartLead() {
   const a = st.an, all = a.dayBuckets, n = all.length;
   const top = new Array(n).fill(0);
@@ -946,28 +1006,230 @@ function chartLead() {
   g += `<text x="${L + iw / 2}" y="${H - 8}" text-anchor="middle">dias entre a compra e a partida</text>`;
   $('#chLead').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Compras por antecedência">${g}</svg>`;
 }
-function chartScatter() {
-  const a = st.an, pts = a.seats.filter(s => s.appear && s.avgPct != null);
-  const top = new Set(activeTop().map(s => s.seat));
-  const W = 640, H = 400, L = 48, R = 12, T = 12, B = 52, iw = W - L - R, ih = H - T - B;
-  const x = v => L + v * iw, y = v => T + (1 - v) * ih;
-  let g = `<rect class="qd" x="${x(.5)}" y="${y(1)}" width="${iw / 2}" height="${ih / 2}"/>`;
-  [0, .25, .5, .75, 1].forEach(v => {
-    g += `<line class="gl" x1="${x(v)}" y1="${T}" x2="${x(v)}" y2="${T + ih}"/><text x="${x(v)}" y="${H - 30}" text-anchor="middle">${Math.round(v * 100)}%</text>`;
-    g += `<line class="gl" x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}"/><text x="${L - 8}" y="${y(v) + 3}" text-anchor="end">${Math.round(v * 100)}%</text>`;
-  });
-  g += `<line class="ax" x1="${L}" y1="${T + ih}" x2="${W - R}" y2="${T + ih}"/><line class="ax" x1="${L}" y1="${T}" x2="${L}" y2="${T + ih}"/>`;
-  g += `<text x="${L + iw / 2}" y="${H - 8}" text-anchor="middle">cobertura</text>`;
-  g += `<text transform="translate(13 ${T + ih / 2}) rotate(-90)" text-anchor="middle">precocidade</text>`;
-  const cs = getComputedStyle(document.documentElement);
-  const acc = cs.getPropertyValue('--acc').trim(), dim = cs.getPropertyValue('--dim').trim();
-  pts.forEach(s => {
-    const hot = top.has(s.seat), r = 4 + Math.sqrt(s.appear) * .5;
-    g += `<circle class="bub" cx="${x(s.coverage).toFixed(1)}" cy="${y(1 - s.avgPct).toFixed(1)}" r="${r.toFixed(1)}" fill="${hot ? acc : dim}" fill-opacity="${hot ? .92 : .33}" stroke="${hot ? acc : dim}"><title>Poltrona ${s.seat}: ${pct(s.coverage, 1)} das viagens · precocidade ${pct(1 - s.avgPct, 1)} · ${brl0(s.revenue)}</title></circle>`;
-    if (hot) g += `<text x="${x(s.coverage).toFixed(1)}" y="${(y(1 - s.avgPct) + 3).toFixed(1)}" text-anchor="middle" style="font-size:8.5px;font-weight:800;fill:var(--acc-ink);pointer-events:none">${s.seat}</text>`;
-  });
-  $('#chScatter').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cobertura por precocidade">${g}</svg>`;
+/* ══════════════════════════════════════════════════════════════
+   COMO O ÔNIBUS ENCHE
+   Curva acumulada da esquerda (mais de 2 meses antes) até a partida,
+   à direita. Cada ponto responde: desta data em diante, que fatia
+   das vendas daquele grupo já tinha acontecido?
+
+   O eixo do tempo é invertido de propósito — dias-antes decresce
+   rumo à partida, e ler da esquerda para a direita passa a ser ler
+   o calendário na direção natural.
+
+   A curva é desenhada progressivamente com stroke-dashoffset: a
+   animação não é enfeite, é a leitura do próprio fenômeno.
+   ══════════════════════════════════════════════════════════════ */
+const fillState = { scope: '5' };
+const FILL_MARKS = ['2 meses', '1 mês', '4 sem', '2 sem', '1 sem', '5 d', '3 d', '2 d', '1 d', 'partida'];
+
+function fillSeries(seats) {
+  const n = st.an.dayBuckets.length;
+  const b = new Array(n).fill(0);
+  seats.forEach(s => (s.buckets || []).forEach((v, i) => b[i] += v));
+  const total = b.reduce((x, y) => x + y, 0) || 1;
+  /* buckets vêm do mais próximo da partida para o mais distante;
+     acumulamos ao contrário, para a curva subir rumo à partida */
+  const out = [0];
+  let acc = 0;
+  for (let i = n - 1; i >= 0; i--) { acc += b[i]; out.push(acc / total); }
+  return { pts: out, total: b.reduce((x, y) => x + y, 0) };
 }
+function chartFill() {
+  const a = st.an;
+  const all = a.seats.filter(s => s.appear);
+  const listaTop = activeList();
+  const grupo = fillState.scope === 'all' ? all
+    : listaTop.slice(0, Number(fillState.scope));
+  const rotulo = fillState.scope === 'all' ? 'Todas as poltronas' : 'Top ' + fillState.scope;
+  $('#fillKeyA').textContent = rotulo;
+
+  const A = fillSeries(grupo), B = fillSeries(all);
+  const n = A.pts.length;
+  const W = 660, H = 300, L = 44, R = 14, T = 16, Bm = 46, iw = W - L - R, ih = H - T - Bm;
+  const x = i => L + (i / (n - 1)) * iw;
+  const y = v => T + (1 - v) * ih;
+  const linha = pts => pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const area = pts => linha(pts) + ` L${x(n - 1).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z`;
+
+  let g = '';
+  [0, .25, .5, .75, 1].forEach(v => {
+    g += `<line class="gl" x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}"/>` +
+      `<text x="${L - 8}" y="${y(v) + 3}" text-anchor="end">${Math.round(v * 100)}%</text>`;
+  });
+  FILL_MARKS.forEach((lb, i) => {
+    if (i % 2 && i !== FILL_MARKS.length - 1) return;   /* alterna para não colidir */
+    g += `<text x="${x(i)}" y="${T + ih + 18}" text-anchor="middle">${lb}</text>`;
+  });
+  /* a partida é o limite: uma linha vertical marca o fim do prazo */
+  g += `<line x1="${x(n - 1)}" y1="${T}" x2="${x(n - 1)}" y2="${T + ih}" stroke="var(--line-3)" stroke-dasharray="3 4"/>`;
+  g += `<line class="ax" x1="${L}" y1="${T + ih}" x2="${W - R}" y2="${T + ih}"/>`;
+
+  g += `<path class="fillarea" d="${area(A.pts)}"/>`;
+  g += `<path class="fillref" d="${linha(B.pts)}"/>`;
+  g += `<path class="fillline" d="${linha(A.pts)}"/>`;
+
+  /* marcador em cada ponto, com a leitura em texto */
+  A.pts.forEach((v, i) => {
+    if (!i) return;
+    g += `<g class="fillpt" style="--d:${(i / (n - 1) * 1.1).toFixed(2)}s">
+      <circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5"/>
+      <title>${esc(FILL_MARKS[i - 1] || '')} antes da partida: ${pct(v, 0)} das vendas de ${esc(rotulo.toLowerCase())} já tinham acontecido</title></g>`;
+  });
+  g += `<text x="${L + iw / 2}" y="${H - 8}" text-anchor="middle">quando a venda aconteceu, rumo à partida</text>`;
+
+  const meta = marcoMetade(A.pts);
+  $('#chFill').innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Curva de enchimento até a partida">${g}</svg>` +
+    `<p class="filltell">${esc(rotulo)}: metade das vendas já tinha acontecido <b>${esc(meta)}</b> antes da partida` +
+    `${A.total ? ` · ${int(A.total)} ${pl(A.total, 'compra', 'compras')} no recorte` : ''}.</p>`;
+  playFill();
+}
+/* em que marco a curva cruza os 50% */
+function marcoMetade(pts) {
+  for (let i = 1; i < pts.length; i++) if (pts[i] >= .5) return FILL_MARKS[i - 1] || 'na partida';
+  return 'na partida';
+}
+function playFill() {
+  const svg = $('#chFill svg'); if (!svg) return;
+  svg.classList.remove('run');
+  void svg.getBoundingClientRect();     /* força o reinício da animação */
+  svg.classList.add('run');
+}
+/* ══════════════════════════════════════════════════════════════
+   O SALÃO ENCHENDO
+   A mesma linha do tempo, agora sobre a planta. Cada poltrona acende
+   no ponto do prazo em que METADE das suas compras já tinha
+   acontecido — a mediana da antecedência, não a média, para que
+   duas compras muito antecipadas não façam a poltrona acender cedo
+   demais.
+
+   Vale a regra da primeira compra: `medLead` vem das primeiras
+   compras de cada viagem, então cancelamento seguido de revenda não
+   move o momento em que a poltrona acende.
+   ══════════════════════════════════════════════════════════════ */
+const sfState = { scope: '5', step: 9, timer: 0 };
+function bucketIndex(dias) {
+  const B = S.BUCKETS;
+  for (let i = 0; i < B.length; i++) if (dias < B[i][1]) return i;
+  return B.length - 1;
+}
+function buildSeatFill() {
+  const a = st.an, L = S.LAYOUTS[a.layout];
+  const nb = S.BUCKETS.length;
+  const acende = new Map();
+  a.seats.forEach(s => {
+    if (!s.appear) return;
+    /* sem mediana de antecedência a poltrona só acende na partida */
+    const d = s.medLead != null ? s.medLead : (s.avgLead != null ? s.avgLead : 0);
+    acende.set(s.seat, nb - 1 - bucketIndex(d));
+  });
+  sfState.acende = acende;
+
+  const g = document.createElement('div');
+  g.className = 'sfgrid';
+  g.style.gridTemplateColumns = `repeat(${L.columns}, minmax(0,1fr))`;
+  let extra = `<div class="band">${esc(L.band)}</div>`;
+  if (L.stairCol) extra += `<div class="stair" style="grid-column:${L.stairCol}">${ico('stairs')}</div>`;
+  if (L.wcCol) extra += `<div class="wc" style="grid-row:1;grid-column:${L.wcCol}">${ico('wc')}</div>`;
+  g.innerHTML = extra;
+  a.seats.forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'sfseat';
+    d.dataset.seat = s.seat;
+    d.style.gridRow = s.gridRow; d.style.gridColumn = s.col;
+    d.textContent = s.seat;
+    d.title = s.appear
+      ? `Poltrona ${s.seat} · mediana ${num(s.medLead, 1)} dias antes da partida · ${int(s.appear)} ${pl(s.appear, 'viagem', 'viagens')}`
+      : `Poltrona ${s.seat} · sem venda no recorte`;
+    g.appendChild(d);
+  });
+  const host = $('#sfBus');
+  host.innerHTML = '';
+  host.appendChild(g);
+
+  $('#sfMarks').innerHTML = FILL_MARKS.map(m => `<span>${esc(m)}</span>`).join('');
+  $('#sfKey').textContent = sfState.scope === 'all' ? 'Ranking ativo' : 'Top ' + sfState.scope;
+  paintSeatFill(sfState.step);
+}
+function paintSeatFill(step) {
+  const a = st.an;
+  sfState.step = step;
+  const destaque = sfState.scope === 'all' ? new Set()
+    : new Set(activeList().slice(0, Number(sfState.scope)).map(s => s.seat));
+  /* mesma escala do mapa de calor: a poltrona não acende em branco,
+     acende já na cor que ela tem no mapa — a leitura é a mesma */
+  const sp = stops();
+  const pos = seatPositions();
+  let vendidas = 0, total = 0;
+  $$('#sfBus .sfseat').forEach(el => {
+    const n = Number(el.dataset.seat);
+    const q = sfState.acende.get(n);
+    const temVenda = q != null;
+    if (temVenda) total++;
+    const on = temVenda && q <= step;
+    if (on) vendidas++;
+    if (on && pos.has(n)) {
+      const c = ramp(pos.get(n), sp);
+      el.style.background = rgb(c);
+      el.style.color = ink(c);
+    } else {
+      el.style.background = '';
+      el.style.color = '';
+    }
+    el.classList.toggle('on', on);
+    el.classList.toggle('dead', !temVenda);
+    el.classList.toggle('hot', destaque.has(n));
+  });
+  $('#sfRange').value = step;
+  $('#sfWhen').textContent = FILL_MARKS[step] === 'partida' ? 'Partida' : FILL_MARKS[step] + ' antes';
+  const jaTop = sfState.scope === 'all' ? null
+    : [...destaque].filter(n => { const q = sfState.acende.get(n); return q != null && q <= step; }).length;
+  $('#sfNow').innerHTML = `<b>${int(vendidas)}</b> de ${int(total)} poltronas já vendidas`
+    + (jaTop != null ? ` · <b>${jaTop}</b> de ${destaque.size} do top` : '');
+}
+/* Loop contínuo: percorre o prazo, segura um instante na partida,
+   apaga e recomeça. Parar é só arrastar a barra ou clicar de novo. */
+function playSeatFill(loop) {
+  clearInterval(sfState.timer);
+  if (loop === false) { sfState.timer = 0; sfState.loop = false; return; }
+  sfState.loop = true;
+  paintSeatFill(0);
+  let k = 0, pausa = 0;
+  sfState.timer = setInterval(() => {
+    if (pausa > 0) { pausa--; return; }
+    k++;
+    if (k > 9) { k = -1; pausa = 3; paintSeatFill(0); return; }
+    paintSeatFill(k);
+  }, 560);
+  const b = $('#sfPlay');
+  if (b) b.classList.add('on');
+}
+function stopSeatFill() {
+  clearInterval(sfState.timer); sfState.timer = 0; sfState.loop = false;
+  const b = $('#sfPlay'); if (b) b.classList.remove('on');
+}
+$('#sfRange').addEventListener('input', e => {
+  stopSeatFill();
+  paintSeatFill(Number(e.target.value));
+});
+$('#sfPlay').addEventListener('click', () => {
+  if (sfState.loop) stopSeatFill(); else playSeatFill();
+});
+$('#seatFillScope').addEventListener('click', e => {
+  const b = e.target.closest('[data-sf]'); if (!b || b.dataset.sf === sfState.scope) return;
+  sfState.scope = b.dataset.sf;
+  $$('#seatFillScope button').forEach(x => x.classList.toggle('on', x === b));
+  $('#sfKey').textContent = sfState.scope === 'all' ? 'Ranking ativo' : 'Top ' + sfState.scope;
+  paintSeatFill(sfState.step);
+});
+
+$('#fillSwitch').addEventListener('click', e => {
+  const b = e.target.closest('[data-fill]'); if (!b || b.dataset.fill === fillState.scope) return;
+  fillState.scope = b.dataset.fill;
+  $$('#fillSwitch button').forEach(x => x.classList.toggle('on', x === b));
+  chartFill();
+});
+$('#fillReplay').addEventListener('click', playFill);
 function chartRank() {
   const mode = st.rank, list = activeList();
   if (!list.length) { $('#chRank').innerHTML = '<p style="color:var(--muted);font-size:11.5px">Sem poltronas acima da amostra mínima.</p>'; return; }
@@ -1013,34 +1275,102 @@ function renderTable() {
 }
 
 /* ── método e qualidade ─────────────────────────────── */
+/* Cada cartão mostra a conta e, logo abaixo, a mesma conta refeita com
+   um número real deste recorte — a fórmula sozinha não convence
+   ninguém que precisa defender o resultado numa reunião. */
+function ex(passos, resultado) {
+  return `<div class="exbox"><span class="exlbl">Exemplo com os seus dados</span>
+    ${passos.map(p => `<div class="exrow"><i>${esc(p[0])}</i><b>${p[1]}</b></div>`).join('')}
+    <div class="exres"><i>${esc(resultado[0])}</i><b>${resultado[1]}</b></div></div>`;
+}
 function renderMethod() {
   const a = st.an, l = a.leadTop, f = a.top10[0], m = a.mostSold, sp = stops();
   const boxes = [0, .25, .5, .75, 1].map(t => { const c = ramp(t, sp); return `<span style="background:${rgb(c)};color:${ink(c)}">${Math.round(t * 100)}</span>`; }).join('');
+  const rich = a.seats.filter(s => s.appear && s.revenue > 0).sort((x, y) => y.revenue - x.revenue)[0];
+  const pos = seatPositions();
+
   const cards = [
-    ['01', 'Viagem e primeira compra', `<p>As vendas são agrupadas por viagem — um veículo, um dia, um horário — pelo ID quando existe, senão por serviço, linha, data, hora, origem e destino. A poltrona conta uma vez por viagem, pela primeira compra; revendas ficam à parte.</p><code>chave = serviço | linha | data | hora | origem | destino</code><p>Recorte atual: <b>${int(a.period.tripCount)} viagens</b>.</p>`],
-    ['02', 'Rank e percentil', `<p>Dentro da viagem, as poltronas são ordenadas pelo instante da primeira compra. O rank médio é a média dessas posições. O percentil normaliza viagens cheias e vazias.</p><code>percentil = (rank médio − 1) ÷ (vendidas − 1)</code>${f ? `<p>Ex.: poltrona ${f.seat} · rank médio ${num(f.avgRank, 2)} em ${int(f.appear)} viagens → percentil ${pct(f.avgPct, 1)}.</p>` : ''}`],
-    ['03', 'Antecedência e empates', `<p>Antecedência é a distância de calendário até a partida; média e mediana andam juntas porque compras muito antecipadas distorcem a média.</p><code>antecedência = (partida − 1ª compra) ÷ 86.400.000</code><p>Horários iguais recebem rank médio e o crédito de primeira escolha é rateado. Aqui foram <b>${int(a.summary.tiesFirst)} viagens</b> com empate na primeira posição.${l ? ` Ex.: poltrona ${l.seat}, média ${num(l.avgLead, 1)} d e mediana ${num(l.medLead, 1)} d.` : ''}</p>`],
-    ['04', 'Mapa de calor', `<p>A cor traduz a métrica escolhida, ancorada no maior valor do recorte: a líder recebe a cor cheia e as demais vão perdendo cor proporcionalmente.</p><code>intensidade = valor ÷ maior valor</code><div class="scaleboxes">${boxes}</div><p style="margin-top:8px">${m ? `Âncora atual: poltrona <b>${m.seat}</b>, ${int(m.appear)} viagens.` : ''} A paleta é sua escolha e fica salva no navegador.</p>`],
-    ['05', 'Índice e simulação', `<p>O índice prioriza testes; a simulação estima o efeito financeiro de um reajuste sobre a receita observada.</p>
+    ['01', 'Viagem e primeira compra',
+      `<p>As vendas são agrupadas por viagem — um veículo, um dia, um horário. A poltrona conta uma vez por viagem, pela primeira compra; revendas ficam de fora.</p>
+      <code>chave = serviço | linha | data | hora | origem | destino</code>
+      ${ex([['Bilhetes lidos no recorte', int(a.summary.events)],
+        ['Agrupados em viagens distintas', int(a.period.tripCount)]],
+        ['Poltronas por viagem, em média', num(a.summary.perTrip, 1)])}`],
+
+    ['02', 'Rank e percentil',
+      `<p>Dentro de cada viagem as poltronas são ordenadas pelo instante da primeira compra: a 1ª vendida tem rank 1. O percentil transforma esse rank numa escala de 0 a 100%, para comparar viagem cheia com viagem vazia.</p>
+      <code>percentil = (rank na viagem − 1) ÷ (vendidas na viagem − 1)</code>
+      ${ex([['Numa viagem que vendeu 10 poltronas…', '10'],
+        ['…e a nossa foi a 3ª a sair', 'rank 3'],
+        ['Conta', '(3 − 1) ÷ (10 − 1)']],
+        ['Percentil naquela viagem', '22,2%'])}
+      <p class="exnote">Isso é feito viagem a viagem; o número da tabela é a média desses percentuais.${f ? ` A poltrona ${f.seat}, por exemplo, tem rank médio ${num(f.avgRank, 2)} em ${int(f.appear)} ${pl(f.appear, 'viagem', 'viagens')} e percentil médio ${pct(f.avgPct, 1)}.` : ''} Quanto menor, mais cedo ela sai na fila.</p>`],
+
+    ['03', 'Antecedência',
+      `<p>Dias entre a primeira compra e a partida. Média e mediana andam juntas porque uma compra feita com seis meses de folga puxa a média sozinha.</p>
+      <code>antecedência = (partida − 1ª compra) ÷ 1 dia</code>
+      ${l ? ex([['Poltrona', l.seat],
+        ['Compras com data de partida válida', int(l.leadN)],
+        ['Média dos dias de antecedência', num(l.avgLead, 1) + ' dias'],
+        ['Mediana (metade comprou antes disso)', num(l.medLead, 1) + ' dias']],
+        ['Diferença média − mediana', num(Math.abs((l.avgLead || 0) - (l.medLead || 0)), 1) + ' dias']) : ''}
+      <p class="exnote">Diferença grande entre as duas = poucas compras muito antecipadas inflando a média. Neste recorte houve <b>${int(a.summary.tiesFirst)}</b> ${pl(a.summary.tiesFirst, 'viagem', 'viagens')} com empate na primeira posição; nesses casos o crédito é rateado.</p>`],
+
+    ['04', 'Mapa de calor',
+      `<p>A cor traduz a métrica escolhida. A intensidade é a posição do valor dentro da escala, e depois passa pela curva de sensibilidade que você regula.</p>
+      <code>intensidade = valor ÷ maior valor do recorte</code>
+      <div class="scaleboxes">${boxes}</div>
+      ${m ? ex([['Poltrona mais vendida (a âncora)', `${m.seat} · ${int(m.appear)} viagens`],
+        ['Uma poltrona com metade disso', int(Math.round(m.appear / 2)) + ' viagens'],
+        ['Conta', `${int(Math.round(m.appear / 2))} ÷ ${int(m.appear)}`]],
+        ['Fica na altura da escala', '50%']) : ''}`],
+
+    ['05', 'Índice de oportunidade',
+      `<p>Combina três sinais para priorizar quais poltronas testar primeiro. Não estima receita — ordena candidatas.</p>
       <div class="weights"><div class="wrow"><span>Cobertura</span><div class="tk"><i style="width:50%"></i></div><span class="vv">50%</span></div>
       <div class="wrow"><span>Precocidade</span><div class="tk"><i style="width:35%"></i></div><span class="vv">35%</span></div>
       <div class="wrow"><span>1ª escolha</span><div class="tk"><i style="width:15%"></i></div><span class="vv">15%</span></div></div>
-      <code>nova receita = receita × (1 + aumento) × retenção</code><p>A perda de vendas tolerável é 1 − 1/(1+aumento): acima disso o reajuste destrói receita.</p>`],
-    ['06', 'Limites', `<p>Estudo observacional com amostra mínima de <b>${int(a.minN)} viagens</b> por poltrona. Uma poltrona pode vender cedo por conforto, por aparecer primeiro na tela de venda ou por regra de canal.</p><p>${esc(S.LAYOUTS[a.layout].ctx)}</p><p>Use como hipótese para um teste controlado — nunca como justificativa isolada de reajuste.</p>`]
+      ${f ? ex([['Poltrona', f.seat],
+        ['Cobertura ' + pct(f.coverage, 0) + ' × 0,50', num((f.coverage || 0) * 50, 1)],
+        ['Precocidade ' + pct(1 - (f.avgPct || 0), 0) + ' × 0,35', num((1 - (f.avgPct || 0)) * 35, 1)],
+        ['1ª escolha ' + pct(f.firstRate || 0, 0) + ' ÷ 25% × 0,15', num(Math.min(1, (f.firstRate || 0) / 0.25) * 15, 1)]],
+        ['Índice', num(f.scorePct, 1) + '/100']) : ''}
+      <p class="exnote">A 1ª escolha é dividida por 25% antes de entrar: ser a primeira em um quarto das viagens já vale a nota cheia desse critério.</p>`],
+
+    ['06', 'Receita não cobrada',
+      `<p>Aqui não há previsão. Os bilhetes já foram vendidos: a conta os remarca por um preço maior e mostra a diferença — o que passou pela porta e não foi cobrado.</p>
+      <code>não cobrado = receita observada × aumento</code>
+      ${rich ? ex([['Poltrona', rich.seat],
+        ['Bilhetes vendidos no recorte', int(rich.revN)],
+        ['Receita que entrou', brl0(rich.revenue)],
+        ['Se cada um saísse 10% mais caro', `${brl0(rich.revenue)} × 10%`]],
+        ['Teria entrado a mais', brl0(rich.revenue * 0.10)]) : ''}
+      <p class="exnote">Projeções de mês e ano estendem esse ritmo e supõem a mesma procura.</p>`],
+
+    ['07', 'Limites',
+      `<p>Estudo observacional, amostra mínima de <b>${int(a.minN)} viagens</b> por poltrona. Uma poltrona pode vender cedo por conforto, por aparecer primeiro na tela de venda ou por regra de canal — a base não distingue os três.</p>
+      <p>${esc(S.LAYOUTS[a.layout].ctx)}</p>
+      <p>Use como hipótese para um teste controlado, não como justificativa isolada de reajuste.</p>`]
   ];
+  void pos;
   $('#method').innerHTML = cards.map(c => `<article class="mcard"><span class="st">${c[0]}</span><h3>${esc(c[1])}</h3>${c[2]}</article>`).join('');
 }
 function renderQuality() {
   const a = st.an, q = a.quality || {};
   const cards = [
-    { v: q.rawRows, l: 'linhas lidas' }, { v: q.valid, l: 'eventos válidos' },
-    { v: (q.codeSeat || 0) + (q.badSeat || 0), l: 'poltronas não numéricas', w: (q.codeSeat + q.badSeat) > 0 },
-    { v: q.offLayout, l: 'fora da planta', w: q.offLayout > 0 },
-    { v: q.afterDeparture, l: 'vendas após a partida', w: q.afterDeparture > 0 },
-    { v: q.noSaleTime, l: 'sem data de venda', w: q.noSaleTime > 0 },
-    { v: q.dup, l: 'duplicados' }, { v: q.tiesFirst, l: 'empates na 1ª' }
+    { v: q.rawRows, l: 'linhas lidas', i: 'qRaw' },
+    { v: q.valid, l: 'eventos válidos', i: 'qValid' },
+    { v: (q.codeSeat || 0) + (q.badSeat || 0), l: 'poltronas não numéricas', i: 'qSeat', w: (q.codeSeat + q.badSeat) > 0 },
+    { v: q.offLayout, l: 'fora da planta', i: 'qOff', w: q.offLayout > 0 },
+    { v: q.afterDeparture, l: 'vendas após a partida', i: 'qAfter', w: q.afterDeparture > 0 },
+    { v: q.noSaleTime, l: 'sem data de venda', i: 'qNoDate', w: q.noSaleTime > 0 },
+    { v: q.dup, l: 'duplicados', i: 'qDup' },
+    { v: a.summary.resales, l: 'revendas ignoradas', i: 'qResale', w: (a.summary.resales || 0) > 0 },
+    { v: q.tiesFirst, l: 'empates na 1ª', i: 'qTies' }
   ];
-  $('#qual').innerHTML = cards.map(c => `<article class="qcard${c.w ? ' w' : ''}"><span class="lbl">${esc(c.l)}</span><b>${int(c.v || 0)}</b></article>`).join('');
+  $('#qual').innerHTML = cards.map(c => `<article class="qcard${c.w ? ' w' : ''}">
+    <span class="lbl">${esc(c.l)}<button class="i" data-info="${c.i}" type="button" aria-label="Explicar ${esc(c.l)}">i</button></span>
+    <b>${int(c.v || 0)}</b></article>`).join('');
   const n = [];
   if (q.coarse / Math.max(1, q.valid) > .8) n.push('Mais de 80% das vendas têm horário de hora cheia: empates são esperados e foram rateados.');
   if (q.offLayout) n.push(`${int(q.offLayout)} ocorrências citam poltronas fora da planta “${S.LAYOUTS[a.layout].badge}”. Se o número for alto, troque a planta.`);
@@ -1048,13 +1378,18 @@ function renderQuality() {
   if (a.summary.singles) n.push(`${int(a.summary.singles)} viagens com uma única poltrona vendida entram no volume, mas não no percentil.`);
   if (a.summary.droppedTrips) n.push(`${int(a.summary.droppedTrips)} viagens ficaram fora pelo filtro de ocupação mínima.`);
   if (a.period.depMissing) n.push(`${int(a.period.depMissing)} viagens sem hora de partida não entram na antecedência.`);
+  if (a.summary.resales) n.push(a.summary.includeResales
+    ? `${int(a.summary.resales)} ${pl(a.summary.resales, 'compra repetida', 'compras repetidas')} da mesma poltrona na mesma viagem: você optou por contá-las, e ${brl0(a.summary.resaleRev)} delas estão somados à receita. Ordem e antecedência seguem vindo da primeira compra.`
+    : `${int(a.summary.resales)} ${pl(a.summary.resales, 'compra repetida', 'compras repetidas')} da mesma poltrona na mesma viagem: vale a primeira, e ${brl0(a.summary.resaleRev)} dessas repetições ficaram fora da receita para não contar o lugar duas vezes.`);
+  if (!st.ds || !st.ds.headers || !st.ds.headers.some(h => /tipo\s*venda|situa|status/i.test(h)))
+    n.push('O arquivo não traz coluna de situação da venda, então cancelamentos não são identificados um a um — a regra da primeira compra é o que protege o cálculo nesses casos.');
   if (q.noRevenue) n.push(`${int(q.noRevenue)} registros sem valor: eles contam no volume, mas não na receita nem na simulação.`);
   n.push(`Recorte: ${dt(a.period.start)} a ${dt(a.period.end)} · amostra mínima ${int(a.minN)} · planta ${S.LAYOUTS[a.layout].badge}.`);
   $('#qnotes').innerHTML = n.map(x => `<div><i>—</i><span>${esc(x)}</span></div>`).join('');
 }
 
 /* ══════ SIMULADOR ══════ */
-const sim = { scope: '3', seat: null, rank: 'volume', mode: 'pct', pct: 10, abs: 5, ret: 100, from: '', to: '' };
+const sim = { scope: '3', seat: null, rank: 'volume', mode: 'pct', pct: 10, abs: 5, from: '', to: '' };
 
 /* A análise completa é cara e só muda quando o período ou os filtros
    mudam — não quando o usuário arrasta o percentual. Guardamos o
@@ -1084,11 +1419,9 @@ function openSim(pre) {
   $('#simRank').value = sim.rank;
   $('#simPct').value = sim.pct; $('#simPctTxt').textContent = '+' + sim.pct + '%';
   $('#simAbs').value = sim.abs; $('#simAbsTxt').textContent = '+' + brl0(sim.abs);
-  $('#simRet').value = sim.ret; $('#simRetTxt').textContent = sim.ret + '%';
   $$('#simScope .chip').forEach(c => c.classList.toggle('on', c.dataset.scope === sim.scope));
   $$('#simPreset .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.pct) === sim.pct));
   $$('#simAbsPreset .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.abs) === sim.abs));
-  $$('#simScen .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.ret) === sim.ret));
   syncSimMode();
   $('#simSeatWrap').hidden = sim.scope !== 'one';
   $('#simOut').innerHTML = '';
@@ -1107,30 +1440,9 @@ function simSeats(an) {
   const out = list.slice(0, n);
   return out.length ? out : an.seats.filter(s => s.appear).sort((a, b) => b.revenue - a.revenue).slice(0, n);
 }
-/* O cenário de demanda é a única premissa do modelo que não vem dos
-   dados — é um palpite do usuário. Por isso ele aparece traduzido em
-   bilhetes concretos, e não só como um percentual abstrato. */
-function renderScenExp(r) {
-  const el = $('#simScenExp'); if (!el) return;
-  const perdidos = Math.round(r.tickets * (1 - sim.ret / 100));
-  const nome = sim.ret >= 99 ? 'Otimista' : sim.ret >= 90 ? 'Base' : sim.ret >= 80 ? 'Conservador' : 'Pessimista';
-  const leitura = sim.ret >= 99
-    ? 'ninguém desiste da compra por causa do aumento. É o teto do que se pode esperar — sirva como limite, não como meta.'
-    : `de cada 100 pessoas que compram hoje, ${sim.ret} continuariam comprando depois do aumento. As outras ${100 - sim.ret} procurariam outro horário, outra poltrona ou outra empresa.`;
-  const cabe = r.breakEven > 0
-    ? `O ajuste se paga enquanto a perda ficar abaixo de <b>${pct(r.breakEven, 1)}</b> — no seu recorte, cerca de <b>${int(Math.round(r.tickets * r.breakEven))} bilhetes</b>. `
-    : '';
-  const agora = perdidos <= 0
-    ? `Aqui nenhum bilhete é perdido, então o ganho de <b>${brl0(r.delta)}</b> é o máximo possível.`
-    : r.delta >= 0
-      ? `Neste cenário você abre mão de <b>${int(perdidos)}</b> dos ${int(r.tickets)} bilhetes e ainda assim ganha <b>${brl0(r.delta)}</b>.`
-      : `Neste cenário a perda de <b>${int(perdidos)}</b> dos ${int(r.tickets)} bilhetes passa do ponto de equilíbrio: o aumento sairia <b>${brl0(Math.abs(r.delta))} no vermelho</b>. Ou o aumento é menor, ou a retenção precisa ser melhor que ${sim.ret}%.`;
-  el.innerHTML = `<b>${nome} (${sim.ret}%):</b> ${leitura} ${cabe}${agora}`;
-}
-
 const simOpts = () => sim.mode === 'abs'
-  ? { mode: 'abs', abs: sim.abs, ret: sim.ret }
-  : { mode: 'pct', pct: sim.pct, ret: sim.ret };
+  ? { mode: 'abs', abs: sim.abs }
+  : { mode: 'pct', pct: sim.pct };
 const simLabel = () => sim.mode === 'abs' ? `+${brl0(sim.abs)} por bilhete` : `+${sim.pct}%`;
 
 /* Repintura em dois níveis: arrastar o slider só reescreve os números
@@ -1153,33 +1465,41 @@ function doRenderSim(structural) {
   const curLabel = c => c.abs ? `+${brl0(c.p)}` : `+${c.p}%`;
   const curOn = c => c.abs ? Math.abs(c.p - sim.abs) < .01 : c.p === sim.pct;
 
+  /* a conta escrita por extenso, com os números do recorte */
+  const passo = sim.mode === 'abs'
+    ? `<code>${int(r.tickets)} bilhetes × ${brl(sim.abs)} = <b>${brl0(r.delta)}</b></code>`
+    : `<code>${brl0(r.base)} × ${sim.pct}% = <b>${brl0(r.delta)}</b></code>`;
+
   const html = `
     <div class="bigres">
-      <div><small>Receita atual</small><b id="rBase">—</b><span>${int(r.tickets)} bilhetes na seleção</span></div>
-      <div><small>Com ${esc(simLabel())}</small><b class="acc" id="rNovo">—</b><span>retenção de ${sim.ret}% da demanda</span></div>
-      <div><small>Ganho no período</small><b class="${r.delta >= 0 ? 'up' : 'dn'}" id="rDelta">—</b><span>${pct(r.deltaPct, 1)} sobre a seleção</span></div>
-      <div><small>Projeção 12 meses</small><b class="${r.perYear >= 0 ? 'up' : 'dn'}" id="rYear">—</b><span>${brl(r.perDay)} por dia</span></div>
+      <div><small>Foi cobrado</small><b id="rBase">—</b><span>${int(r.tickets)} bilhetes já vendidos</span></div>
+      <div><small>Teria sido com ${esc(simLabel())}</small><b class="acc" id="rNovo">—</b><span>os mesmos bilhetes</span></div>
+      <div><small>Deixou de entrar</small><b class="up" id="rDelta">—</b><span>${brl(r.porBilhete)} por bilhete</span></div>
+      <div><small>Equivale em 12 meses</small><b class="up" id="rYear">—</b><span>${brl(r.perDay)} por dia</span></div>
     </div>
     <div class="simchart">
-      <h4>Receita da seleção · antes e depois</h4>
-      <div class="cmp">
-        <div class="cmprow"><span>Hoje</span><div class="tk"><i class="a" data-w="${(r.base / maxBar * 100).toFixed(1)}"></i></div><span class="vv">${brl0(r.base)}</span></div>
-        <div class="cmprow"><span>Simulado</span><div class="tk"><i class="b" data-w="${(r.novo / maxBar * 100).toFixed(1)}"></i></div><span class="vv" style="color:var(--acc)">${brl0(r.novo)}</span></div>
+      <h4>A conta</h4>
+      <div class="calcbox">${passo}
+        <p>Estes bilhetes <b>já foram vendidos</b>. A conta não estima procura futura: ela remarca o que saiu pelo preço maior e mostra a diferença — ${pct(r.deltaPct, 1)} a mais sobre a receita dessas poltronas.</p>
       </div>
-      <h4 style="margin-top:16px">Ganho por tamanho do aumento</h4>
+      <h4 style="margin-top:16px">Antes e depois</h4>
+      <div class="cmp">
+        <div class="cmprow"><span>Cobrado</span><div class="tk"><i class="a" data-w="${(r.base / maxBar * 100).toFixed(1)}"></i></div><span class="vv">${brl0(r.base)}</span></div>
+        <div class="cmprow"><span>Com ajuste</span><div class="tk"><i class="b" data-w="${(r.novo / maxBar * 100).toFixed(1)}"></i></div><span class="vv" style="color:var(--acc)">${brl0(r.novo)}</span></div>
+      </div>
+      <h4 style="margin-top:16px">Quanto por tamanho do ajuste</h4>
       <div class="cmp">${r.curve.filter(c => c.p > 0).map(c => `<div class="cmprow"><span>${curLabel(c)}</span>
         <div class="tk"><i class="${curOn(c) ? 'b' : 'a'}" data-w="${(Math.abs(c.v) / curveMax * 100).toFixed(1)}"></i></div>
         <span class="vv"${curOn(c) ? ' style="color:var(--acc)"' : ''}>${brl0(c.v)}</span></div>`).join('')}</div>
     </div>
     <div class="simtbl">
-      <div class="r h"><span>Nº</span><span>Posição</span><span>Viagens</span><span>Ticket médio</span><span>Receita hoje</span><span>Ganho</span></div>
+      <div class="r h"><span>Nº</span><span>Posição</span><span>Bilhetes</span><span>Ticket</span><span>Cobrado</span><span>Não cobrado</span></div>
       ${r.seats.map((x, i) => `<div class="r${i < 3 ? ' t' : ''}"><span>${x.seat}</span><span>${esc(x.position)} · ${esc(x.side)}</span>
-        <span>${int(x.appear)}</span><span>${brl(x.avgRev)} → ${brl(x.novoTicket)}</span><span>${brl0(x.base)}</span>
+        <span>${int(x.tickets)}</span><span>${brl(x.avgRev)} → ${brl(x.novoTicket)}</span><span>${brl0(x.base)}</span>
         <span style="color:var(--acc);font-weight:800">+${brl0(x.delta)}</span></div>`).join('')}
     </div>
-    <div class="simnote">A seleção representa <b>${pct(r.share, 1)}</b> da receita do recorte, então o impacto no total é de <b>${pct(r.totalDeltaPct, 2)}</b> (${brl0(r.totalBase)} → ${brl0(r.totalNovo)}).
-      Com ${esc(simLabel())}${sim.mode === 'abs' ? ` — cerca de ${pct(r.pctEfetivo, 1)} sobre o ticket médio` : ''} a operação suporta perder até <b>${pct(r.breakEven, 1)}</b> das vendas dessas poltronas antes de empatar com a receita de hoje.
-      Cenário determinístico sobre dados observados: não estima elasticidade nem reação da concorrência.</div>`;
+    <div class="simnote">A seleção é <b>${pct(r.share, 1)}</b> da receita do recorte; no total isso daria <b>${pct(r.totalDeltaPct, 2)}</b> a mais (${brl0(r.totalBase)} → ${brl0(r.totalNovo)}).
+      ${sim.mode === 'abs' ? `Somar ${brl(sim.abs)} por bilhete equivale a ${pct(r.pctEfetivo, 1)} sobre o ticket médio. ` : ''}Os 12 meses apenas estendem o ritmo do período — supõem a mesma procura, e um aumento real pode afastar parte dos passageiros.</div>`;
 
   const out = $('#simOut');
   const first = !out.children.length;
@@ -1197,7 +1517,6 @@ function doRenderSim(structural) {
     $('#rYear').textContent = (r.perYear >= 0 ? '+' : '') + brl0(r.perYear);
   }
   $$('#simOut .tk i').forEach(i => { i.style.width = i.dataset.w + '%'; });
-  renderScenExp(r);
   if ($('#simAbsHint')) {
     const tm = r.tickets ? r.base / r.tickets : 0;
     $('#simAbsHint').textContent = tm
@@ -1410,26 +1729,42 @@ function apply() {
     catch (e) { unload(); toast('Não deu para aplicar', e.message, true); }
   }, 40);
 }
-$('#btnApply').addEventListener('click', apply);
-$('#btnMore').addEventListener('click', () => {
-  const h = $('#moreRow').hidden;
-  $('#moreRow').hidden = !h;
-  $('#btnMore').textContent = h ? '− Filtros' : '+ Filtros';
-});
+/* ── filtros: botão flutuante e modal central ───────── */
+function openFilters() {
+  if (!st.an) return;
+  const a = st.an;
+  $('#filSub').textContent = `${dt(a.period.start)} a ${dt(a.period.end)} · ${int(a.period.tripCount)} viagens · ${brl0(a.summary.revenue)}`;
+  $('#dlgFilters').showModal();
+}
+$('#fab').addEventListener('click', openFilters);
+$('#btnApply').addEventListener('click', () => { $('#dlgFilters').close(); apply(); });
 /* todos os campos de recorte, num só lugar */
 const FILTER_IDS = ['fMarket', 'fLine', 'fOrigin', 'fDest', 'fRoute', 'fService', 'fClass', 'fChannel', 'fWeek'];
 $('#btnClear').addEventListener('click', () => {
   FILTER_IDS.forEach(id => $('#' + id).value = '');
   $('#fOcc').value = '0'; $('#fLead').value = 'all';
+  st.layoutManual = false;
+  $('#dlgFilters').close();
   apply();
 });
+/* Dentro do modal nada recalcula sozinho: o usuário monta o recorte
+   inteiro e só então pede o resultado. Evita meia dúzia de análises
+   no meio do caminho — e o overlay piscando por cima do modal. */
 ['from', 'to', 'minN', 'layout', ...FILTER_IDS, 'fOcc', 'fLead'].forEach(id => {
   $('#' + id).addEventListener('change', e => {
     /* escolher a planta na mão desliga a detecção automática */
     if (id === 'layout') { st.layout = e.target.value; st.layoutManual = true; }
-    apply();
+    updateFabCount();
   });
 });
+/* o contador no botão conta o que está selecionado, mesmo antes de aplicar */
+function updateFabCount() {
+  let n = FILTER_IDS.filter(id => $('#' + id).value).length;
+  if ($('#fOcc').value && $('#fOcc').value !== '0') n++;
+  if ($('#fLead').value && $('#fLead').value !== 'all') n++;
+  const b = $('#fabCount');
+  b.textContent = n; b.hidden = !n;
+}
 
 /* ══════════════════════════════════════════════════════════════
    FILTROS ATIVOS
@@ -1454,6 +1789,7 @@ function renderActiveFilters() {
   host.innerHTML = on.map(f => `<button class="fchip" type="button" data-drop="${f.id}" data-reset="${f.reset || ''}"
     title="Remover este filtro"><i>${esc(f.label)}</i>${esc(f.text)}<svg><use href="#s-x"/></svg></button>`).join('')
     + (on.length > 1 ? '<button class="fchip clear" type="button" data-drop="all">Limpar tudo</button>' : '');
+  updateFabCount();
 }
 $('#activeFilters').addEventListener('click', e => {
   const b = e.target.closest('[data-drop]'); if (!b) return;
@@ -1486,8 +1822,11 @@ document.addEventListener('click', e => {
     st.seat = Number(go.dataset.seatGo); paintSeats();
     $('#secMapa').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  /* fechar por [data-close] precisa passar pelo mesmo caminho de
+     closeCfg, senão a gaveta some mas a classe que empurra o
+     conteúdo fica — e a página volta torta, com folga à direita */
   const c = e.target.closest('[data-close]');
-  if (c) $('#' + c.dataset.close).close();
+  if (c) { if (c.dataset.close === 'dlgCfg') closeCfg(); else $('#' + c.dataset.close).close(); }
 });
 /* ── exportação: um botão, dois formatos ────────────── */
 function closeExportMenu() {
@@ -1641,11 +1980,6 @@ $('#simAbsPreset').addEventListener('click', e => {
   $$('#simAbsPreset .chip').forEach(c => c.classList.toggle('on', c === b));
   renderSim();
 });
-$('#simRet').addEventListener('input', e => {
-  sim.ret = Number(e.target.value); $('#simRetTxt').textContent = sim.ret + '%';
-  $$('#simScen .chip').forEach(c => c.classList.toggle('on', Number(c.dataset.ret) === sim.ret));
-  renderSim();
-});
 /* recomendação: alterna entre ler o aumento em % e em reais */
 $('#advTabs').addEventListener('click', e => {
   const b = e.target.closest('[data-adv]'); if (!b || b.dataset.adv === adv.mode) return;
@@ -1656,12 +1990,6 @@ $('#advTabs').addEventListener('click', e => {
 $('#advSim').addEventListener('click', () => {
   if (!adv.last) return openSim();
   openSim({ scope: '3', rank: 'score', mode: adv.mode, abs: adv.last.absSug, pct: adv.last.pctSug });
-});
-$('#simScen').addEventListener('click', e => {
-  const b = e.target.closest('[data-ret]'); if (!b) return;
-  sim.ret = Number(b.dataset.ret); $('#simRet').value = sim.ret; $('#simRetTxt').textContent = sim.ret + '%';
-  $$('#simScen .chip').forEach(c => c.classList.toggle('on', c === b));
-  renderSim();
 });
 $('#simFrom').addEventListener('change', e => { sim.from = e.target.value; invalidateSim(); renderSim(true); });
 $('#simTo').addEventListener('change', e => { sim.to = e.target.value; invalidateSim(); renderSim(true); });
@@ -1732,6 +2060,130 @@ $('#resumeDismiss').addEventListener('click', () => {
   $('#resume').hidden = true;
   try { if (st.hist[0]) localStorage.setItem(RESUME_SKIP, st.hist[0].id); } catch (e) {}
 });
+
+/* ══════════════════════════════════════════════════════════════
+   AMOSTRA DA ENTRADA
+   Números fictícios, só ilustrativos. O ônibus enche em ordem
+   sorteada mas com viés: as cinco poltronas destacadas acendem
+   cedo, que é justamente o padrão que o estudo procura.
+   ══════════════════════════════════════════════════════════════ */
+const PV_MARKS = ['2 meses antes', '1 mês antes', '3 semanas antes', '2 semanas antes',
+  '1 semana antes', '5 dias antes', '3 dias antes', '2 dias antes', 'véspera', 'partida'];
+function buildPreview() {
+  const bus = $('#pvBus'); if (!bus) return;
+  const HOT = new Set([2, 3, 14, 15, 26]);   /* as "campeãs" da amostra */
+  const linhas = [[], [], [], []];
+  for (let i = 0; i < 48; i++) linhas[i % 4].push(i);
+  bus.innerHTML = linhas.map((r, ri) =>
+    `<div class="pvrow${ri === 2 ? ' aisle' : ''}">` +
+    r.map(i => `<i class="pvseat${HOT.has(i) ? ' hot' : ''}" data-i="${i}"></i>`).join('') +
+    '</div>').join('');
+
+  /* momento em que cada poltrona acende: as destacadas bem antes */
+  const quando = new Map();
+  for (let i = 0; i < 48; i++) {
+    const base = HOT.has(i) ? 1 + Math.floor(Math.random() * 3) : 3 + Math.floor(Math.random() * 7);
+    quando.set(i, Math.min(9, base));
+  }
+  /* intensidade fictícia por poltrona, para a amostra já sair na
+     paleta escolhida em vez de um bloco chapado */
+  const calor = new Map();
+  for (let i = 0; i < 48; i++) {
+    calor.set(i, HOT.has(i) ? .82 + Math.random() * .18 : .1 + Math.random() * .6);
+  }
+  let passo = 0;
+  const pinta = () => {
+    const sp = stops();
+    $$('#pvBus .pvseat').forEach(el => {
+      const i = Number(el.dataset.i);
+      const on = quando.get(i) <= passo;
+      el.classList.toggle('on', on);
+      el.style.background = on ? rgb(ramp(calor.get(i), sp)) : '';
+    });
+    $('#pvWhen').textContent = PV_MARKS[passo];
+  };
+  pinta();
+  setInterval(() => {
+    passo++;
+    if (passo > 11) { passo = 0; quando.forEach((v, k) => quando.set(k, HOT.has(k) ? 1 + Math.floor(Math.random() * 3) : 3 + Math.floor(Math.random() * 7))); }
+    if (passo <= 9) pinta();
+  }, 900);
+
+  buildTell();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   O QUE DÁ PARA DESCOBRIR
+   Um painel que troca devagar entre algumas leituras que o estudo
+   entrega. Cada frase vem com um desenho simples do próprio
+   raciocínio — nada de números reais aqui, é só o convite.
+   Troca em 7 segundos, com dissolução longa: não é um carrossel
+   que pisca, é algo que muda enquanto a pessoa lê a página.
+   ══════════════════════════════════════════════════════════════ */
+const TELL = [
+  { t: 'Descubra quanto ficou na mesa',
+    d: 'Se as poltronas mais disputadas tivessem saído um pouco mais caras, quanto teria entrado a mais no ano — sobre passagens que já foram vendidas.',
+    art: 'money' },
+  { t: 'Veja quais esgotam primeiro',
+    d: 'Algumas poltronas vendem semanas antes do resto do veículo. São elas que aguentam um preço maior sem espantar ninguém.',
+    art: 'curve' },
+  { t: 'Compare mercado por mercado',
+    d: 'Filtre por mercado, linha, origem, canal ou classe e veja se o padrão se repete ou se cada trecho tem o seu.',
+    art: 'filter' },
+  { t: 'Leve o estudo pronto',
+    d: 'O relatório sai em PDF espelhando a tela, ou em Excel com a base auditável — para discutir o preço com número na mão.',
+    art: 'doc' }
+];
+function tellArt(kind) {
+  const W = 300, H = 118;
+  if (kind === 'money') {
+    const bars = [.28, .42, .55, .7, .88, 1];
+    return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">` +
+      bars.map((v, i) => {
+        const x = 22 + i * 46, h = v * 74;
+        return `<rect x="${x}" y="${H - 20 - h}" width="26" height="${h}" rx="5" class="tb" style="--i:${i}"/>` +
+          (i === bars.length - 1 ? `<rect x="${x}" y="${H - 20 - h - 16}" width="26" height="13" rx="4" class="tbx"/>` : '');
+      }).join('') +
+      `<line x1="14" y1="${H - 19}" x2="${W - 14}" y2="${H - 19}" stroke="var(--line-2)"/></svg>`;
+  }
+  if (kind === 'curve') {
+    const a = [0, .08, .2, .38, .6, .78, .9, 1], b = [0, .02, .07, .16, .3, .5, .74, 1];
+    const cx = i => 20 + (i / 7) * (W - 40), cy = v => H - 22 - v * 74;
+    const ln = p => p.map((v, i) => `${i ? 'L' : 'M'}${cx(i).toFixed(1)},${cy(v).toFixed(1)}`).join(' ');
+    return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
+      <line x1="14" y1="${cy(0)}" x2="${W - 14}" y2="${cy(0)}" stroke="var(--line-2)"/>
+      <path class="tl b" d="${ln(b)}"/><path class="tl a" d="${ln(a)}"/>
+      <circle class="tdot" cx="${cx(7)}" cy="${cy(1)}" r="4"/></svg>`;
+  }
+  if (kind === 'filter') {
+    const chips = [[18, 26, 84], [110, 26, 62], [180, 26, 96], [18, 60, 70], [96, 60, 88], [192, 60, 74]];
+    return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">` +
+      chips.map((c, i) => `<rect x="${c[0]}" y="${c[1]}" width="${c[2]}" height="22" rx="11" class="tc" style="--i:${i}"/>`).join('') +
+      `<rect x="18" y="94" width="140" height="8" rx="4" class="tc dim" style="--i:6"/></svg>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    <rect x="86" y="14" width="74" height="92" rx="7" class="tp" style="--i:0"/>
+    <rect x="146" y="24" width="74" height="92" rx="7" class="tp on" style="--i:1"/>
+    <rect x="158" y="42" width="46" height="5" rx="2.5" class="tln"/>
+    <rect x="158" y="56" width="38" height="5" rx="2.5" class="tln"/>
+    <rect x="158" y="70" width="44" height="5" rx="2.5" class="tln"/>
+    <rect x="158" y="84" width="26" height="5" rx="2.5" class="tln"/></svg>`;
+}
+function buildTell() {
+  const host = $('#pvSlides'); if (!host) return;
+  host.innerHTML = TELL.map((s, i) => `<article class="pvslide${i ? '' : ' on'}" data-i="${i}">
+    <div class="pvart">${tellArt(s.art)}</div>
+    <b>${esc(s.t)}</b><span>${esc(s.d)}</span>
+  </article>`).join('');
+  $('#pvDots').innerHTML = TELL.map((s, i) => `<i class="${i ? '' : 'on'}"></i>`).join('');
+  let k = 0;
+  setInterval(() => {
+    k = (k + 1) % TELL.length;
+    $$('#pvSlides .pvslide').forEach(el => el.classList.toggle('on', Number(el.dataset.i) === k));
+    $$('#pvDots i').forEach((el, i) => el.classList.toggle('on', i === k));
+  }, 7000);
+}
+buildPreview();
 
 buildPal();
 loadHist().then(offerResume);

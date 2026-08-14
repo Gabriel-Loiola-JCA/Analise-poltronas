@@ -56,6 +56,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--acc);outline-offset:3px}
 [hidden]{display:none !important}
 svg{display:block;width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* ícones sólidos: o triângulo do play e a estrela são preenchidos,
+   não contornados — com o traço da regra acima eles engordam e
+   estouram a caixa do botão */
+svg.solidicon,.gh svg.solidicon{fill:currentColor;stroke:none}
 .sprite{position:absolute;width:0;height:0;overflow:hidden}
 .wrap{width:min(1560px,100%);margin:0 auto;padding:0 var(--pad)}
 .lbl{font-size:9.5px;font-weight:800;letter-spacing:.17em;text-transform:uppercase;color:var(--dim)}
@@ -106,8 +110,11 @@ header.top .wrap{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,
 .menu small{display:block;font-size:10.5px;color:var(--dim);margin-top:2px;line-height:1.4}
 
 /* ── entrada ────────────────────────────────────────── */
+/* a entrada ocupa a altura da janela e centra o conteúdo verticalmente */
 .enter{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(min(100%,390px),.8fr);
-  gap:clamp(28px,6vw,86px);align-items:center;padding:clamp(40px,8vh,96px) 0 70px;position:relative;z-index:1}
+  gap:clamp(28px,6vw,86px);align-items:center;min-height:calc(100dvh - 58px);
+  padding:clamp(28px,5vh,56px) 0 clamp(24px,4vh,48px);position:relative;z-index:1}
+@media (max-height:720px){.enter{min-height:0;padding-top:clamp(24px,4vh,40px)}}
 .enter h1{font-size:clamp(36px,5.4vw,70px);font-weight:300;line-height:.98;letter-spacing:-.05em}
 .enter h1 b{font-weight:800;display:block}
 .enter .lead{max-width:52ch;margin-top:22px;color:var(--muted);font-size:clamp(14px,1.15vw,16.5px)}
@@ -136,18 +143,85 @@ header.top .wrap{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,
 .entergrid b{display:block;font-size:11.5px}
 .entergrid small{display:block;color:var(--dim);font-size:10px}
 
-/* ── deck de filtros ────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+   AMOSTRA NA ENTRADA
+   Duas peças rodando sozinhas, com números fictícios, só para quem
+   chega entender em cinco segundos o que o painel entrega.
+   ══════════════════════════════════════════════════════════════ */
+.preview{padding:0 0 clamp(48px,8vh,88px);position:relative;z-index:1}
+.preview>.lbl{display:block;margin-bottom:14px}
+.pvgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:var(--gap)}
+.pvcard{margin:0;padding:18px;border:1px solid var(--line-2);border-radius:var(--r-lg);background:var(--panel);
+  display:flex;flex-direction:column;gap:14px;overflow:hidden}
+.pvcard figcaption b{display:block;font-size:12.5px;font-weight:700;letter-spacing:-.02em}
+.pvcard figcaption span{display:block;margin-top:3px;color:var(--dim);font-size:10.5px;line-height:1.45}
+.pvbus{padding:9px;border:1.5px solid var(--bus-edge);border-radius:14px 8px 8px 14px;background:var(--bus-shell)}
+.pvrow{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px}
+.pvrow+.pvrow{margin-top:4px}
+.pvrow.aisle{margin-top:9px}
+.pvseat{height:clamp(12px,1.7vw,18px);border-radius:4px;background:var(--seat-empty);opacity:.6;
+  transition:background .7s var(--ease),transform .55s var(--ease),opacity .7s var(--ease)}
+.pvseat.on{transform:translateY(-1px);opacity:1}
+.pvseat.hot.on{box-shadow:0 0 0 2px var(--panel),0 0 0 3.5px var(--acc)}
+.pvclock{display:flex;justify-content:center}
+.pvclock i{font-style:normal;padding:4px 12px;border:1px solid var(--line-2);border-radius:var(--r-pill);
+  background:var(--panel-2);color:var(--muted);font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums}
+/* ── painel de leituras, troca lenta ─────────────────── */
+.pvtell{justify-content:space-between;gap:0}
+.pvslides{position:relative;flex:1;min-height:250px}
+.pvslide{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;
+  opacity:0;visibility:hidden;transform:translateY(8px);
+  transition:opacity 1.1s var(--ease),transform 1.1s var(--ease),visibility 0s linear 1.1s}
+.pvslide.on{opacity:1;visibility:visible;transform:none;transition-delay:0s}
+.pvart{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;margin-bottom:2px}
+.pvart svg{width:100%;height:auto;max-height:130px}
+.pvslide b{font-size:clamp(14px,1.35vw,17px);font-weight:800;letter-spacing:-.03em;line-height:1.25}
+.pvslide span{color:var(--muted);font-size:11.5px;line-height:1.55}
+.pvdots{display:flex;gap:6px;justify-content:center;margin-top:14px}
+.pvdots i{width:5px;height:5px;border-radius:50%;background:var(--line-3);opacity:.4;
+  transition:opacity .8s var(--ease),width .8s var(--ease),background .8s var(--ease)}
+.pvdots i.on{width:18px;border-radius:3px;opacity:1;background:var(--acc)}
+
+/* desenhos: entram escalonados quando o slide aparece */
+.pvslide .tb,.pvslide .tc,.pvslide .tp{opacity:0}
+.pvslide.on .tb{fill:var(--acc);opacity:.32;animation:tellrise .9s var(--ease) forwards;
+  animation-delay:calc(var(--i) * .1s);transform-origin:center bottom}
+.pvslide.on .tb:last-of-type{opacity:1}
+.tbx{fill:var(--acc);opacity:.9}
+.pvslide.on .tc{fill:none;stroke:var(--line-3);stroke-width:1.2;opacity:0;
+  animation:tellin .8s var(--ease) forwards;animation-delay:calc(var(--i) * .12s)}
+.pvslide.on .tc.dim{stroke:none;fill:var(--line-2)}
+.pvslide.on .tp{fill:var(--panel-2);stroke:var(--line);stroke-width:1.2;
+  animation:tellin .9s var(--ease) forwards;animation-delay:calc(var(--i) * .18s)}
+.pvslide.on .tp.on{fill:var(--panel);stroke:var(--acc)}
+.tln{fill:var(--line-3);opacity:.5}
+.tl{fill:none;stroke-linecap:round}
+.tl.a{stroke:var(--acc);stroke-width:2.4;stroke-dasharray:520;stroke-dashoffset:520}
+.pvslide.on .tl.a{animation:drawline 1.6s var(--ease) .25s forwards}
+.tl.b{stroke:var(--dim);stroke-width:1.5;stroke-dasharray:4 5;opacity:.4}
+.tdot{fill:var(--acc);opacity:0}
+.pvslide.on .tdot{animation:tellin .5s var(--ease) 1.7s forwards}
+@keyframes tellrise{from{opacity:0;transform:scaleY(.4)}to{opacity:.32;transform:none}}
+@keyframes tellin{to{opacity:1}}
+
+@media (prefers-reduced-motion:reduce){
+  .pvseat{transition:none}
+  .pvslide,.pvslide *{animation:none !important;transition:none !important}
+  .pvslide.on .tl.a{stroke-dashoffset:0}
+  .pvslide.on .tb,.pvslide.on .tc,.pvslide.on .tp,.pvslide.on .tdot{opacity:1}
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BARRA DA FONTE
+   O que antes era um deck fixo de filtros virou só a identificação
+   do arquivo e os filtros em vigor. Não gruda no topo: rola com a
+   página, para não cobrir nada.
+   ══════════════════════════════════════════════════════════════ */
 main{position:relative;z-index:1}
-.deck{position:sticky;top:66px;z-index:600;margin-top:16px;border:1px solid var(--line);border-radius:var(--r-lg);
-  background:color-mix(in srgb,var(--panel) 76%,transparent);box-shadow:var(--sh-2);
-  -webkit-backdrop-filter:blur(28px) saturate(150%);backdrop-filter:blur(28px) saturate(150%);
-  transition:box-shadow .3s var(--ease),border-color .3s var(--ease)}
-.deckrow{display:grid;grid-template-columns:minmax(170px,1.5fr) repeat(3,minmax(104px,.6fr)) minmax(140px,.85fr) auto auto;
-  gap:8px;align-items:end;padding:10px}
-.deckrow.more{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));border-top:1px solid var(--line-2);
-  align-items:end;animation:slidein .35s var(--ease)}
-@keyframes slidein{from{opacity:0;transform:translateY(-6px)}}
-.src{display:flex;align-items:center;gap:9px;min-width:0;padding:2px 4px}
+.srcbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;padding:12px 16px;
+  border:1px solid var(--line-2);border-radius:var(--r);background:var(--panel)}
+.srcbar .chipsrow{padding:0;margin-left:auto}
+.src{display:flex;align-items:center;gap:9px;min-width:0;padding:0}
 .src svg{width:16px;height:16px;color:var(--acc);flex:0 0 auto}
 .src div{min-width:0}
 .src b{display:block;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -179,8 +253,33 @@ main{position:relative;z-index:1}
 .fchip.clear{background:none;color:var(--dim);font-weight:700}
 .fchip.clear:hover{border-color:var(--line-3);color:var(--text)}
 
-.deckbtns{display:flex;gap:6px}
-.deck .gh{height:36px;border-radius:var(--r-pill);padding:0 15px}
+/* ══════════════════════════════════════════════════════════════
+   FILTROS · botão flutuante e modal central
+   O deck fixo no topo cobria o conteúdo e brigava com o cabeçalho
+   grudado. Virou um botão no canto e um modal centrado.
+   ══════════════════════════════════════════════════════════════ */
+#fab{position:fixed;right:16px;bottom:62px;z-index:820;display:inline-flex;align-items:center;gap:9px;
+  height:44px;padding:0 18px;border:1px solid var(--line);border-radius:var(--r-pill);
+  background:color-mix(in srgb,var(--panel) 84%,transparent);
+  -webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);
+  color:var(--text);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:var(--sh-3);
+  transition:transform .2s var(--ease),border-color .2s var(--ease);
+  animation:fabin .45s var(--ease)}
+@keyframes fabin{from{opacity:0;transform:translateY(10px) scale(.94)}}
+#fab[hidden]{display:none}
+#fab:hover{transform:translateY(-2px);border-color:var(--line-3)}
+#fab:active{transform:scale(.97)}
+#fab svg{width:15px;height:15px;fill:currentColor;stroke:none}
+#fab i{display:grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border-radius:var(--r-pill);
+  background:var(--acc);color:var(--acc-ink);font-style:normal;font-size:10px;font-weight:800}
+#fab i[hidden]{display:none}
+@media (max-width:620px){#fab span{display:none}#fab{padding:0 14px}}
+
+.filgrp{margin-bottom:22px}
+.filgrp:last-child{margin-bottom:0}
+.filgrp>.lbl{display:block;margin-bottom:10px}
+.filgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px;align-items:end}
+#dlgFilters .mdfoot{justify-content:space-between}
 
 /* ── seções ─────────────────────────────────────────── */
 section{padding:64px 0 0;position:relative;scroll-margin-top:124px}
@@ -199,6 +298,16 @@ section{padding:64px 0 0;position:relative;scroll-margin-top:124px}
 .narr p{margin:5px 0 0;font-size:clamp(13.5px,1.2vw,17px);font-weight:300;letter-spacing:-.02em;line-height:1.4}
 .narr p b{font-weight:800}
 .narr .sub{margin-top:6px;font-size:11.5px;color:var(--muted);font-weight:400;letter-spacing:0;line-height:1.5}
+
+/* aviso de limite metodológico — âmbar, não vermelho: é ressalva, não erro */
+.warn{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;margin-bottom:10px;
+  padding:14px 16px;border:1px solid var(--warn);border-radius:var(--r);
+  background:color-mix(in srgb,var(--warn) 8%,var(--panel))}
+.warn[hidden]{display:none}
+.warn svg{width:17px;height:17px;color:var(--warn);margin-top:1px}
+.warn b{display:block;font-size:12px;color:var(--text);margin-bottom:3px}
+.warn span{display:block;color:var(--muted);font-size:11px;line-height:1.55}
+.warn span b{display:inline;margin:0}
 
 /* ══════════════════════════════════════════════════════════════
    RECOMENDAÇÃO · leitura em linguagem de gente
@@ -428,7 +537,9 @@ h2 .i,h3 .i{vertical-align:middle;margin-left:5px}
 .chart:hover{border-color:var(--line)}
 .chart h3{font-size:13.5px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:5px}
 .chart p.hint{color:var(--dim);font-size:10.5px;margin:4px 0 14px}
-.chart svg{width:100%;height:auto;overflow:visible}
+/* :not(.solidicon) — sem isso a regra pega também os ícones dos
+   botões dentro do cartão, que esticam para 100% da largura */
+.chart svg:not(.solidicon){width:100%;height:auto;overflow:visible}
 .chart svg text{fill:var(--dim);font-family:var(--font);font-size:11.5px;stroke:none}
 .chart svg rect,.chart svg circle,.chart svg path.area{stroke:none}
 .chart .ax{stroke:var(--line);stroke-width:1}
@@ -438,7 +549,79 @@ h2 .i,h3 .i{vertical-align:middle;margin-left:5px}
 .chart .qd{fill:var(--acc-dim)}
 .chart .barA{fill:var(--acc)}
 .chart .barB{fill:var(--dim);opacity:.42}
+/* ══════════════════════════════════════════════════════════════
+   CURVA DE ENCHIMENTO
+   A linha se desenha da esquerda para a direita, no mesmo sentido
+   em que o tempo corre rumo à partida.
+   ══════════════════════════════════════════════════════════════ */
+.chart.wide{grid-column:1/-1}
+.chhead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.chhead .hint{margin-bottom:0}
+.switch.small{padding:3px}
+.switch.small button{min-height:27px;padding:0 12px;font-size:10.5px}
+.fillfoot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:10px}
+.fillfoot .gh{height:30px;padding:0 13px;font-size:11px}
+.fillfoot .chartkey{margin-top:0}
+.filltell{margin:12px 0 0;padding:11px 13px;border-left:2px solid var(--acc);border-radius:0 var(--r-sm) var(--r-sm) 0;
+  background:var(--panel-2);color:var(--muted);font-size:11px;line-height:1.5}
+.filltell b{color:var(--text)}
+
+#chFill svg .fillline{fill:none;stroke:var(--acc);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+#chFill svg .fillref{fill:none;stroke:var(--dim);stroke-width:1.6;stroke-dasharray:4 5;opacity:.5}
+#chFill svg .fillarea{fill:var(--acc);opacity:.10;stroke:none}
+#chFill svg .fillpt circle{fill:var(--acc);stroke:var(--panel);stroke-width:1.5;cursor:help}
+
+/* estado parado: nada aparece até a animação rodar */
+#chFill svg .fillline{stroke-dasharray:2400;stroke-dashoffset:2400}
+#chFill svg .fillarea{opacity:0}
+#chFill svg .fillpt{opacity:0}
+#chFill svg.run .fillline{animation:drawline 2.1s var(--ease) forwards}
+#chFill svg.run .fillarea{animation:fadearea .9s var(--ease) 1.1s forwards}
+#chFill svg.run .fillpt{animation:ptin .4s var(--ease) forwards;animation-delay:var(--d)}
+@keyframes drawline{to{stroke-dashoffset:0}}
+@keyframes fadearea{to{opacity:.10}}
+@keyframes ptin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  #chFill svg .fillline{stroke-dashoffset:0}
+  #chFill svg .fillarea{opacity:.10}
+  #chFill svg .fillpt{opacity:1}
+}
+
+/* ══════════════════════════════════════════════════════════════
+   O SALÃO ENCHENDO
+   ══════════════════════════════════════════════════════════════ */
+.sfstage{display:grid;gap:14px}
+.sfclock{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.sfclock b{display:block;margin-top:3px;font-size:clamp(17px,1.7vw,23px);font-weight:800;letter-spacing:-.04em}
+.sfnow{color:var(--muted);font-size:11.5px;text-align:right}
+.sfnow b{display:inline;font-size:13.5px;color:var(--acc)}
+.sfbus{padding:clamp(8px,1.2vw,14px);border:2px solid var(--bus-edge);
+  border-radius:clamp(12px,1.6vw,22px) 10px 10px clamp(12px,1.6vw,22px);background:var(--bus-shell)}
+.sfgrid{display:grid;grid-template-rows:repeat(5,minmax(0,auto));align-items:center;gap:clamp(2px,.4vw,6px)}
+/* a transição longa é o "fade" de uma poltrona para a outra: a cor
+   entra por dissolução, não por troca seca */
+.sfseat{position:relative;height:clamp(17px,2.6vw,38px);display:grid;place-items:center;border-radius:clamp(3px,.45vw,8px);
+  border:1px solid rgba(125,125,125,.22);background:var(--seat-empty);color:var(--seat-empty-ink);
+  font-size:clamp(6px,.85vw,11px);font-weight:800;opacity:.55;
+  transition:background .7s var(--ease),color .7s var(--ease),transform .55s var(--ease),
+    box-shadow .55s var(--ease),opacity .7s var(--ease)}
+.sfseat.on{transform:translateY(-2px);opacity:1;box-shadow:0 6px 16px -6px rgba(0,0,0,.5)}
+.sfseat.dead{opacity:.22}
+/* botão rodando: vira "pausar" visualmente */
+#sfPlay.on{border-color:var(--acc);color:var(--acc)}
+#sfPlay.on svg{animation:pulseplay 1.6s var(--ease) infinite}
+@keyframes pulseplay{50%{opacity:.35}}
+.sfseat.hot::after{content:"";position:absolute;inset:-3px;border:2px solid var(--acc);border-radius:inherit;pointer-events:none}
+.sfseat.hot.on::after{border-color:var(--text)}
+.sftrack{display:grid;gap:5px}
+.sftrack input[type=range]{width:100%}
+.sfmarks{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));color:var(--dim);font-size:8px;
+  letter-spacing:.04em;text-align:center}
+.sfmarks span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:620px){.sfmarks span:nth-child(even){visibility:hidden}}
+
 .chartkey{display:flex;flex-wrap:wrap;gap:7px 14px;margin-top:10px;color:var(--dim);font-size:9.5px}
+.chartkey b.t5{border:2px solid var(--acc);background:none}
 .chartkey em{display:inline-flex;align-items:center;gap:5px;font-style:normal}
 .chartkey b{width:9px;height:9px;flex:0 0 auto}
 .rowbar{display:grid;grid-template-columns:24px 28px minmax(0,1fr) 58px;align-items:center;gap:8px;min-height:30px;
@@ -488,6 +671,25 @@ h2 .i,h3 .i{vertical-align:middle;margin-left:5px}
 .mcard code{display:block;padding:9px 11px;background:var(--bg);border:1px solid var(--line-2);border-radius:var(--r-sm);
   color:var(--muted);font-family:var(--mono);font-size:10.5px;overflow-wrap:anywhere;margin:8px 0}
 .mcard ul{margin:6px 0 0;padding-left:15px;color:var(--muted);font-size:11px}
+/* a mesma conta, refeita com um número real do recorte */
+.exbox{margin:11px 0 0;padding:12px 13px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--bg)}
+.exlbl{display:block;margin-bottom:9px;color:var(--dim);font-size:8px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.exrow,.exres{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:4px 0;font-size:11px}
+.exrow i{font-style:normal;color:var(--muted);min-width:0}
+.exrow b{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.exres{margin-top:7px;padding-top:9px;border-top:1px solid var(--line-2)}
+.exres i{font-style:normal;color:var(--dim);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.exres b{font-size:15px;font-weight:800;letter-spacing:-.03em;white-space:nowrap;color:var(--acc)}
+.exnote{margin:9px 0 0 !important;color:var(--dim);font-size:10px;line-height:1.5}
+
+/* a conta do simulador, escrita por extenso */
+.calcbox{padding:13px 14px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--bg)}
+.calcbox code{display:block;padding:10px 12px;border-radius:var(--r-xs);background:var(--panel);
+  border:1px solid var(--line-2);color:var(--muted);font-family:var(--mono);font-size:12px;text-align:center}
+.calcbox code b{color:var(--acc);font-size:14px}
+.calcbox p{margin:10px 0 0;color:var(--dim);font-size:10.5px;line-height:1.55}
+.calcbox p b{color:var(--text)}
+
 .weights{display:grid;gap:6px;margin-top:9px}
 .wrow{display:grid;grid-template-columns:88px minmax(0,1fr) 36px;align-items:center;gap:8px;font-size:10.5px}
 .wrow .tk{height:7px;border-radius:var(--r-pill);background:var(--line-2);overflow:hidden}
@@ -506,11 +708,12 @@ h2 .i,h3 .i{vertical-align:middle;margin-left:5px}
 .qnotes div:last-child{border-bottom:0}
 .qnotes i{font-style:normal;color:var(--acc);flex:0 0 auto}
 
-footer{margin-top:64px;padding:22px 0 34px;border-top:1px solid var(--line-2);color:var(--dim);font-size:10.5px;
-  display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
-footer b{color:var(--text);font-size:11px;letter-spacing:.02em}
+/* assinatura e versão centradas, uma sob a outra */
+footer{margin-top:64px;padding:26px 0 38px;border-top:1px solid var(--line-2);color:var(--dim);font-size:10.5px;
+  display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;text-align:center}
+footer b{color:var(--text);font-size:11.5px;letter-spacing:.02em}
 footer .made{display:inline-flex;align-items:center;gap:7px}
-footer .made::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--acc)}
+footer #ver{font-size:10px;letter-spacing:.06em}
 
 /* ── modais ─────────────────────────────────────────── */
 dialog.md{width:min(1080px,calc(100% - 24px));max-height:min(90vh,900px);padding:0;border:1px solid var(--line);
@@ -582,11 +785,6 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acc)
 .simtbl .r span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .simnote{padding:13px 15px;border-left:2px solid var(--warn);border-radius:0 var(--r) var(--r) 0;background:var(--panel-2);
   color:var(--muted);font-size:10.5px;line-height:1.5}
-/* explicação do cenário de demanda, logo abaixo dos presets */
-.scenexp{margin:10px 0 0;padding:10px 12px;border-radius:var(--r-sm);background:var(--panel);
-  border:1px solid var(--line-2);color:var(--muted);font-size:10.5px;line-height:1.55;
-  animation:fadein .3s var(--ease)}
-.scenexp b{color:var(--text)}
 @keyframes fadein{from{opacity:0;transform:translateY(3px)}}
 
 /* ══════════════════════════════════════════════════════════════
@@ -639,16 +837,20 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acc)
 .toast span{display:block;color:var(--dim);font-size:10px;margin-top:1px}
 @keyframes tin{from{opacity:0;transform:translateY(12px) scale(.97)}}
 
+/* O overlay entra e sai por opacidade e desfoque, nunca por corte
+   seco. Como o fundo fica semitransparente, dá para ver a tela se
+   montando atrás — a troca deixa de ser um salto entre duas telas. */
 .load{position:fixed;inset:0;z-index:7000;display:grid;place-items:center;align-content:center;gap:16px;padding:28px;
-  text-align:center;background:color-mix(in srgb,var(--bg) 76%,transparent);
-  -webkit-backdrop-filter:blur(30px) saturate(140%);backdrop-filter:blur(30px) saturate(140%);
-  animation:fadein .3s var(--ease)}
-.load h2,.load p,.load .track,.load .lbl{animation:riseup .5s var(--ease) backwards}
-.load .lbl{animation-delay:.04s}
-.load h2{animation-delay:.08s}
-.load p{animation-delay:.13s}
-.load .track{animation-delay:.18s}
-@keyframes riseup{from{opacity:0;transform:translateY(9px)}}
+  text-align:center;background:color-mix(in srgb,var(--bg) 62%,transparent);
+  -webkit-backdrop-filter:blur(26px) saturate(130%);backdrop-filter:blur(26px) saturate(130%);
+  opacity:0;transition:opacity .45s var(--ease)}
+.load.on{opacity:1}
+.load h2,.load p,.load .track,.load .lbl{transition:opacity .3s var(--ease)}
+/* o painel também nasce por transparência, em vez de aparecer pronto */
+#dash{transition:opacity .55s var(--ease)}
+#dash.fading{opacity:0}
+#enter{transition:opacity .35s var(--ease)}
+#enter.fading{opacity:0}
 .load .ring{width:58px;height:58px;border:1px solid var(--line);border-radius:50%;position:relative}
 .load .ring::before{content:"";position:absolute;inset:-1px;border:2px solid transparent;border-top-color:var(--acc);
   border-radius:50%;animation:spin 1.1s linear infinite}
@@ -669,10 +871,6 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acc)
 
 .hactions .short{display:none}
 @media (max-width:1240px){
-  .deckrow{grid-template-columns:minmax(170px,1fr) 1fr 1fr 1fr;position:relative}
-  .deck{position:relative;top:0}
-  .deckrow .src{grid-column:1/-1}
-  .deckbtns{grid-column:span 2}
   .podium{grid-template-columns:repeat(3,minmax(0,1fr))}
   .pod.first{grid-column:span 3}
   .mapwrap{grid-template-columns:1fr}
@@ -706,8 +904,6 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acc)
   .switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
   .switch button{padding:0 4px;font-size:10px}
   .shead{align-items:flex-start;flex-direction:column;gap:12px}
-  .deckrow{grid-template-columns:1fr 1fr}
-  .deckbtns{grid-column:1/-1}
   .podium{grid-template-columns:1fr 1fr}
   .pod.first{grid-column:1/-1}
   .tbl .head,.tbl .row{grid-template-columns:minmax(42px,.5fr) minmax(86px,1.1fr) repeat(2,minmax(0,.9fr))}
@@ -849,14 +1045,14 @@ main{transition:padding-right .42s var(--ease)}
 .cfghint{margin-top:9px;color:var(--dim);font-size:10px;line-height:1.5}
 
 /* interface tingida pela paleta do mapa (opcional, via Ajustes) */
-html[data-tint=on]{--acc:var(--heat-hi,#f2f2ee);--acc-ink:var(--heat-ink,#0a0a0a);
-  --acc-dim:var(--heat-dim,rgba(255,255,255,.10));--acc-soft:var(--heat-soft,rgba(255,255,255,.05))}
+/* O acento da interface é fixo e neutro. A paleta do mapa NÃO o
+   altera em nenhuma hipótese: cor aqui é dado, não decoração. */
 html[data-glow=off] body::after{display:none}
 /* o contorno do top 5 é sempre neutro: não disputa leitura com a escala */
 html[data-top5=off] .seat.top5::after{display:none}
 
 @media print{
-  header.top,.deck,#totop,.toasts,.metric,.switch,.srch,.pal,.gh,dialog{display:none !important}
+  header.top,#fab,#totop,.toasts,.metric,.switch,.srch,.pal,.sensbar,.gh,dialog{display:none !important}
   body{background:#fff;color:#111}
   body::after{display:none}
   section{padding-top:20px;break-inside:avoid}

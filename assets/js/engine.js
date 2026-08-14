@@ -389,6 +389,10 @@ function analyze(ds, o) {
       revSum: 0, revN: 0, tickets: 0, resale: 0, days: new Set(), channels: {} };
   });
   let totalEvents = 0, totalRev = 0, tiesFirst = 0, singles = 0, offLayout = 0, depMissing = 0, dropped = 0;
+  let resaleRev = 0;      /* receita das compras repetidas, deixada de fora */
+  let billedTickets = 0;  /* primeiras compras com valor — base do ticket médio */
+  let ordemViagens = 0, ordemSoma = 0, seatsTied = 0, seatsRanked = 0;
+  const comRevenda = o.includeResales === true;
   const dayBuckets = new Array(BUCKETS.length).fill(0), dates = new Set(), revByDate = {};
   let tripsUsed = 0;
 
@@ -415,6 +419,18 @@ function analyze(ds, o) {
     const fMs = seats[0].ms, lMs = seats[n - 1].ms;
     const fSet = seats.filter(s => s.ms === fMs), lSet = seats.filter(s => s.ms === lMs);
     if (fSet.length > 1) tiesFirst++;
+    /* QUANTA ORDEM SOBROU
+       Com horário gravado só na hora cheia, compras da mesma hora
+       chegam empatadas e a ordem entre elas é desconhecida. Medimos
+       a fração de pares que ainda tem ordem definida, para o painel
+       poder avisar quando o ranking "vende primeiro" perde o chão. */
+    if (n > 1) {
+      const distintos = new Set(seats.map(s => s.ms)).size;
+      ordemViagens++;
+      ordemSoma += (distintos - 1) / (n - 1);
+      seatsTied += n - distintos;
+      seatsRanked += n;
+    }
     let i = 0;
     while (i < n) {
       let j = i;
@@ -426,12 +442,30 @@ function analyze(ds, o) {
         if (t.date) a.days.add(t.date);
         if (n > 1) a.pcts.push((mid - 1) / (n - 1));
         if (s.lead != null) { a.leads.push(s.lead); const b = bucketOf(s.lead); a.buckets[b]++; dayBuckets[b]++; }
-        if (s.ev.length > 1) a.resale += s.ev.length - 1;
-        s.ev.forEach(e => {
-          totalEvents++;
+        /* REGRA DA PRIMEIRA COMPRA
+           Uma poltrona pode ser vendida, cancelada e revendida na
+           mesma viagem. Vale SEMPRE a primeira compra — e não só
+           para a ordem e a antecedência, mas também para a receita.
+           Somar as duas contaria como se o lugar tivesse sido
+           ocupado duas vezes, inflando receita, ticket médio e a
+           conta de receita não cobrada. As demais ficam registradas
+           como revenda, para ninguém achar que sumiram. */
+        if (s.ev.length > 1) {
+          a.resale += s.ev.length - 1;
+          s.ev.slice(1).forEach(e => {
+            const v = e.r != null ? e.r : e.p;
+            if (v != null) resaleRev += v;
+          });
+        }
+        totalEvents += s.ev.length;
+        /* comRevenda: o usuário pode pedir a visão de caixa, somando
+           tudo o que foi cobrado. A ordem e a antecedência continuam
+           vindo da primeira compra em qualquer um dos modos. */
+        const cobra = comRevenda ? s.ev : [s.ev[0]];
+        cobra.forEach(e => {
           const val = e.r != null ? e.r : e.p;
           if (val != null) {
-            a.revSum += val; a.revN++; totalRev += val;
+            a.revSum += val; a.revN++; totalRev += val; billedTickets++;
             if (t.date) revByDate[t.date] = (revByDate[t.date] || 0) + val;
           }
           a.tickets++;
@@ -494,9 +528,17 @@ function analyze(ds, o) {
       events: totalEvents, seatTrips: sold.reduce((n, s) => n + s.appear, 0), revenue: round(totalRev, 2),
       soldSeats: sold.length, layoutSeats: Object.keys(L.map).length,
       perTrip: round(tripCount ? sold.reduce((n, s) => n + s.appear, 0) / tripCount : 0, 1),
-      avgTicket: round(totalEvents ? totalRev / totalEvents : 0, 2),
+      /* o ticket médio divide pela quantidade de PRIMEIRAS compras,
+         que é o mesmo universo somado em totalRev */
+      billed: billedTickets,
+      avgTicket: round(billedTickets ? totalRev / billedTickets : 0, 2),
       revPerTrip: round(tripCount ? totalRev / tripCount : 0, 2),
       occupancy: round(tripCount && Object.keys(L.map).length ? sold.reduce((n, s) => n + s.appear, 0) / (tripCount * Object.keys(L.map).length) : 0),
+      resales: sold.reduce((n, s) => n + (s.resale || 0), 0), resaleRev: round(resaleRev, 2),
+      includeResales: comRevenda,
+      /* saúde do ranking de ordem: 1 = ordem totalmente conhecida */
+      orderKept: round(ordemViagens ? ordemSoma / ordemViagens : 1),
+      tiedSeats: seatsTied, rankedSeats: seatsRanked,
       tiesFirst, singles, offLayout, droppedTrips: dropped
     },
     seats, top10: byFirst.slice(0, 10), topLead10: byLead.slice(0, 10), topVolume10: byVolume.slice(0, 10),
@@ -508,56 +550,58 @@ function analyze(ds, o) {
 }
 
 /* ---- simulação de reajuste ---- */
-/* Dois modos de reajuste:
-   'pct' — percentual sobre o preço médio pago (padrão)
-   'abs' — valor fixo em reais somado a cada bilhete
-   Em ambos, a receita bruta é calculada antes da retenção e só
-   depois multiplicada por ela, para o ponto de equilíbrio sair certo. */
+/* RETROATIVO, NÃO PREDITIVO
+   O cálculo não estima quantas pessoas desistiriam com o preço maior.
+   Ele responde a outra pergunta, mais dura e sem premissa nenhuma:
+   estes bilhetes JÁ FORAM VENDIDOS — quanto teria entrado se cada um
+   deles tivesse saído por um preço maior? A diferença é dinheiro que
+   passou pela porta e não foi cobrado.
+
+   Dois modos:
+   'pct' — percentual sobre o preço médio pago
+   'abs' — valor fixo em reais somado a cada bilhete vendido */
 function simulate(an, opt) {
   const mode = opt.mode === 'abs' ? 'abs' : 'pct';
   const pct = Math.max(0, Number(opt.pct) || 0) / 100;
   const abs = Math.max(0, Number(opt.abs) || 0);
-  const ret = Math.min(1, Math.max(0, Number(opt.ret) == null ? 1 : Number(opt.ret) / 100));
   const seats = (opt.seats || []).map(s => {
     const base = s.revenue || 0;
     const tickets = s.revN || s.tickets || 0;
-    const cheio = mode === 'abs' ? base + abs * tickets : base * (1 + pct);
-    const novo = cheio * ret;
+    const novo = mode === 'abs' ? base + abs * tickets : base * (1 + pct);
     return { seat: s.seat, position: s.position, side: s.side, appear: s.appear, tickets,
-      avgRev: s.avgRev, base: round(base, 2), cheio: round(cheio, 2), novo: round(novo, 2),
+      avgRev: s.avgRev, base: round(base, 2), novo: round(novo, 2),
       delta: round(novo - base, 2),
       novoTicket: round(mode === 'abs' ? (s.avgRev || 0) + abs : (s.avgRev || 0) * (1 + pct), 2) };
   });
   const base = seats.reduce((n, s) => n + s.base, 0);
-  const cheio = seats.reduce((n, s) => n + s.cheio, 0);
   const novo = seats.reduce((n, s) => n + s.novo, 0);
   const delta = novo - base;
   const total = an.summary.revenue || 0;
   const days = an.period.calendarDays || 1;
   const tickets = seats.reduce((n, s) => n + (s.tickets || 0), 0);
-  /* quanto da venda dá para perder antes de empatar com a receita de hoje */
-  const breakEven = cheio > base ? 1 - base / cheio : 0;
   /* percentual efetivo — no modo 'abs' depende do ticket médio da seleção */
-  const pctEfetivo = base ? cheio / base - 1 : 0;
+  const pctEfetivo = base ? novo / base - 1 : 0;
+  /* quanto cada bilhete deixou de render, em média */
+  const porBilhete = tickets ? delta / tickets : 0;
   const curve = [];
   if (mode === 'abs') {
     const step = abs > 0 ? abs / 2 : 2.5;
     for (let i = 0; i <= 8; i++) {
       const v = round(i * step, 2);
-      curve.push({ p: v, abs: true, v: round((base + v * tickets) * ret - base, 2) });
+      curve.push({ p: v, abs: true, v: round(v * tickets, 2) });
     }
   } else {
-    for (let p = 0; p <= 40; p += 5) curve.push({ p, v: round(base * ((1 + p / 100) * ret - 1), 2) });
+    for (let p = 0; p <= 40; p += 5) curve.push({ p, v: round(base * (p / 100), 2) });
   }
   return {
-    mode, abs: round(abs, 2), pct: round(pct, 4), pctEfetivo: round(pctEfetivo, 4), ret: round(ret, 4), seats,
-    base: round(base, 2), cheio: round(cheio, 2), novo: round(novo, 2), delta: round(delta, 2),
+    mode, abs: round(abs, 2), pct: round(pct, 4), pctEfetivo: round(pctEfetivo, 4), seats,
+    base: round(base, 2), novo: round(novo, 2), delta: round(delta, 2),
     deltaPct: round(base ? delta / base : 0), share: round(total ? base / total : 0),
-    totalBase: round(total, 2), totalNovo: round(total - base + novo, 2),
+    totalBase: round(total, 2), totalNovo: round(total + delta, 2),
     totalDeltaPct: round(total ? delta / total : 0),
     perTrip: round(an.period.tripCount ? delta / an.period.tripCount : 0, 2),
     perDay: round(days ? delta / days : 0, 2), perYear: round(days ? delta / days * 365 : 0, 2),
-    breakEven: round(breakEven, 4), tickets, curve,
+    porBilhete: round(porBilhete, 2), tickets, curve,
     perMonth: round(days ? delta / days * 30 : 0, 2), perHalf: round(days ? delta / days * 182 : 0, 2)
   };
 }
@@ -1096,10 +1140,10 @@ function pdf(an, opts) {
     pdfHead(p, 'Simulação de reajuste', 'CENÁRIO DE PREÇO', 4, total, an.sourceName);
     card(p, 34, 74, cw, 66, 'Receita atual', money0(s.base), `${s.seats.length} poltronas · ${s.tickets} bilhetes`);
     const ajuste = s.mode === 'abs' ? `+${money0(s.abs)} por bilhete` : `+${(s.pct * 100).toFixed(0)}%`;
-    card(p, 34 + cw + gap, 74, cw, 66, `Com ${ajuste}`, money0(s.novo), `retenção de demanda ${(s.ret * 100).toFixed(0)}%`);
-    card(p, 34 + (cw + gap) * 2, 74, cw, 66, 'Ganho no período', money0(s.delta), `${pctS(s.deltaPct)} sobre a seleção`, '1F7A3A');
-    card(p, 34 + (cw + gap) * 3, 74, cw, 66, 'Projeção 12 meses', money0(s.perYear), `${money0(s.perDay)} por dia`, '1F7A3A');
-    p.text(34, 160, 'Poltronas do cenário', 11, { bold: true, color: DEEP });
+    card(p, 34 + cw + gap, 74, cw, 66, `Teria entrado com ${ajuste}`, money0(s.novo), `mesmos ${s.tickets} bilhetes já vendidos`);
+    card(p, 34 + (cw + gap) * 2, 74, cw, 66, 'Deixou de entrar', money0(s.delta), `${money0(s.porBilhete)} por bilhete`, '1F7A3A');
+    card(p, 34 + (cw + gap) * 3, 74, cw, 66, 'Equivalente em 12 meses', money0(s.perYear), `${money0(s.perDay)} por dia`, '1F7A3A');
+    p.text(34, 160, 'Poltronas da seleção', 11, { bold: true, color: DEEP });
     const c4 = [{ t: 'Poltrona', w: 52, a: 'center' }, { t: 'Posição', w: 130, a: 'left' }, { t: 'Viagens', w: 52, a: 'right' },
       { t: 'Bilhetes', w: 52, a: 'right' }, { t: 'Ticket médio', w: 78, a: 'right' }, { t: 'Receita atual', w: 88, a: 'right' },
       { t: 'Receita simulada', w: 98, a: 'right' }, { t: 'Ganho', w: 78, a: 'right' }];
@@ -1109,11 +1153,11 @@ function pdf(an, opts) {
     p.rect(34, end + 16, 3, 58, WARN);
     p.text(48, end + 26, 'COMO LER', 7, { bold: true, color: WARN });
     p.para(48, end + 38, (s.mode === 'abs'
-      ? `Receita simulada = (receita observada + ${money0(s.abs)} × bilhetes) × ${(s.ret * 100).toFixed(0)}% de retenção — equivale a ${(s.pctEfetivo * 100).toFixed(1)}% sobre o ticket médio da seleção. `
-      : `Receita simulada = receita observada × (1 + ${(s.pct * 100).toFixed(0)}%) × ${(s.ret * 100).toFixed(0)}% de retenção. `) +
-      `Com esse ajuste a operação suporta perder até ${pctS(s.breakEven)} das vendas dessas poltronas antes de empatar com a receita atual. ` +
+      ? `Cálculo: ${s.tickets} bilhetes já vendidos × ${money0(s.abs)} a mais = ${money0(s.delta)} — equivale a ${(s.pctEfetivo * 100).toFixed(1)}% sobre o ticket médio da seleção. `
+      : `Cálculo: ${money0(s.base)} de receita observada × ${(s.pct * 100).toFixed(0)}% = ${money0(s.delta)}, sobre os mesmos ${s.tickets} bilhetes já vendidos. `) +
+      `Não é projeção de vendas futuras: são passagens que já saíram, remarcadas pelo preço maior. ` +
       `A seleção representa ${pctS(s.share)} da receita do recorte, então o impacto no total é de ${pctS(s.totalDeltaPct)}. ` +
-      `Trata-se de um cenário determinístico sobre dados observados: não estima elasticidade nem prevê reação da concorrência.`, A4.w - 110, 7.6, 10.5, { color: MUT, max: 4 });
+      `O valor de 12 meses apenas estende o ritmo observado no período; ele supõe demanda igual, e um aumento real pode afastar parte dos passageiros.`, A4.w - 110, 7.6, 10.5, { color: MUT, max: 4 });
   }
 
   download(pdfBytes(pages, opts.title || 'Estudo de Poltronas'), opts.filename || 'estudo-poltronas.pdf', 'application/pdf');

@@ -7,6 +7,8 @@
 <meta name="description" content="Estudo de poltronas · ordem de compra, antecedência, mapa de calor configurável e simulação de preço. Roda 100% no navegador.">
 <meta name="author" content="Gabriel Loiola">
 <meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="./favicon-preto.png" media="(prefers-color-scheme: light)">
+<link rel="icon" type="image/png" href="./favicon-branco.png" media="(prefers-color-scheme: dark)">
 <title>Estudo de Poltronas</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="preload" href="./assets/css/app.css" as="style">
@@ -39,6 +41,7 @@
   <symbol id="s-drop" viewBox="0 0 24 24"><path d="M12 2.7 6.5 9.4a7 7 0 1 0 11 0z"/></symbol>
   <symbol id="s-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/></symbol>
   <symbol id="s-play" viewBox="0 0 24 24"><path d="M6 4.5v15l13-7.5z"/></symbol>
+  <symbol id="s-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
 </svg>
 
 <header class="top">
@@ -88,7 +91,7 @@
       <b id="resumeName">—</b>
       <small id="resumeMeta">—</small>
       <div class="rzacts">
-        <button class="gh solid" id="resumeGo" type="button"><svg><use href="#s-play"/></svg>Continuar este estudo</button>
+        <button class="gh solid" id="resumeGo" type="button"><svg class="solidicon"><use href="#s-play"/></svg>Continuar este estudo</button>
         <button class="linkish" id="resumeAll" type="button">Ver todos no histórico</button>
       </div>
     </div>
@@ -109,44 +112,42 @@
     </div>
   </div>
 </section>
+
+<section class="preview" id="preview" aria-label="Amostra do que o painel entrega">
+  <span class="lbl">O que sai daqui</span>
+  <div class="pvgrid">
+    <figure class="pvcard">
+      <figcaption><b>O salão enchendo</b><span>as poltronas acendem na ordem em que costumam ser compradas</span></figcaption>
+      <div class="pvbus" id="pvBus" aria-hidden="true"></div>
+      <div class="pvclock"><i id="pvWhen">2 meses antes</i></div>
+    </figure>
+    <figure class="pvcard pvtell" id="pvTell" aria-live="polite">
+      <div class="pvslides" id="pvSlides"></div>
+      <div class="pvdots" id="pvDots" aria-hidden="true"></div>
+    </figure>
+  </div>
+</section>
 </div>
 
 <div class="wrap" id="dash" hidden>
 
-  <div class="deck">
-    <div class="deckrow">
-      <div class="src"><svg><use href="#s-file"/></svg><div><b id="srcName">—</b><span id="srcMeta">—</span></div></div>
-      <div class="fld"><label for="from">De</label><input id="from" type="date"></div>
-      <div class="fld"><label for="to">Até</label><input id="to" type="date"></div>
-      <div class="fld"><label for="minN">Amostra mín. <button class="i" data-info="sample" type="button" aria-label="Amostra mínima">i</button></label><input id="minN" type="number" min="1" max="9999" step="1"></div>
-      <div class="fld"><label for="layout">Planta <button class="i" data-info="layout" type="button" aria-label="Planta">i</button></label><select id="layout"></select></div>
-      <div class="deckbtns"><button class="gh" id="btnMore" type="button">+ Filtros</button><button class="gh solid" id="btnApply" type="button">Aplicar</button></div>
-    </div>
-    <div class="deckrow more" id="moreRow" hidden>
-      <div class="fld"><label for="fMarket">Mercado</label><select id="fMarket"></select></div>
-      <div class="fld"><label for="fLine">Linha</label><select id="fLine"></select></div>
-      <div class="fld"><label for="fOrigin">Origem</label><select id="fOrigin"></select></div>
-      <div class="fld"><label for="fDest">Destino</label><select id="fDest"></select></div>
-      <div class="fld"><label for="fRoute">Trecho (origem → destino)</label><select id="fRoute"></select></div>
-      <div class="fld"><label for="fService">Serviço</label><select id="fService"></select></div>
-      <div class="fld"><label for="fClass">Classe</label><select id="fClass"></select></div>
-      <div class="fld"><label for="fChannel">Canal de venda</label><select id="fChannel"></select></div>
-      <div class="fld"><label for="fWeek">Dia da semana</label><select id="fWeek"></select></div>
-      <div class="fld"><label for="fOcc">Ocupação mínima da viagem</label><select id="fOcc"></select></div>
-      <div class="fld"><label for="fLead">Janela de antecedência</label><select id="fLead"></select></div>
-      <div class="deckbtns"><button class="gh" id="btnClear" type="button">Limpar filtros</button></div>
-    </div>
+  <div class="srcbar">
+    <div class="src"><svg><use href="#s-file"/></svg><div><b id="srcName">—</b><span id="srcMeta">—</span></div></div>
     <div class="chipsrow" id="activeFilters" hidden></div>
   </div>
 
   <section id="secResumo">
     <div class="shead">
       <div><span class="lbl">Visão executiva</span><h2>O que os dados <b>dizem</b></h2></div>
-      <div class="switch" id="rankSwitch" role="tablist" aria-label="Ranking">
+      <div class="switch" id="rankSwitch" role="tablist" aria-label="Ranking" data-warn="false">
         <button type="button" data-rank="advance" class="on" role="tab" aria-selected="true">Maior antecedência</button>
         <button type="button" data-rank="first" role="tab" aria-selected="false">Vendem primeiro</button>
         <button type="button" data-rank="volume" role="tab" aria-selected="false">Mais vendidas</button>
       </div>
+    </div>
+    <div class="warn rv" id="orderWarn" hidden>
+      <svg><use href="#s-clock"/></svg>
+      <div><b>A ordem de compra deste arquivo é parcial</b><span id="orderWarnTxt">—</span></div>
     </div>
     <article class="narr rv"><span class="mk">i</span><div><small>Leitura principal</small><p id="narr">—</p><p class="sub" id="narrSub"></p></div></article>
     <div class="kpis rv" id="kpis"></div>
@@ -164,6 +165,52 @@
         <small id="adviceCaveat">—</small>
       </div>
     </article>
+  </section>
+
+  <section id="secEse">
+    <div class="shead">
+      <div><span class="lbl">Conta de padeiro</span><h2>E se você <b>subisse o preço?</b></h2>
+        <p>Só o aumento entra na conta, sem o preço da passagem. Um serviço por dia, todo dia.</p></div>
+    </div>
+
+    <div class="ese rv">
+      <div class="esectl">
+        <div class="esefld">
+          <span class="lbl">Aumento por poltrona</span>
+          <div class="chips" id="eseVal">
+            <button class="chip" data-v="1" type="button">R$ 1</button>
+            <button class="chip" data-v="2" type="button">R$ 2</button>
+            <button class="chip on" data-v="5" type="button">R$ 5</button>
+            <button class="chip" data-v="10" type="button">R$ 10</button>
+            <button class="chip" data-v="20" type="button">R$ 20</button>
+          </div>
+        </div>
+        <div class="esefld">
+          <span class="lbl">Em quantas poltronas</span>
+          <div class="chips" id="eseQtd">
+            <button class="chip" data-q="3" type="button">3</button>
+            <button class="chip on" data-q="5" type="button">5</button>
+            <button class="chip" data-q="10" type="button">10</button>
+            <button class="chip" data-q="20" type="button">20</button>
+            <button class="chip" data-q="full" type="button">o ônibus todo</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="esefrase" id="eseFrase">—</p>
+      <div class="esenums" id="eseNums"></div>
+      <p class="esecalc" id="eseCalc">—</p>
+    </div>
+
+    <div class="esegrid rv" id="eseGrid"></div>
+
+    <p class="esenote">
+      Esta conta é de propósito a mais simples possível: <b>valor do aumento × poltronas × dias</b>.
+      Ela supõe <b>um serviço por dia</b>, todos os dias do período, com todas essas poltronas vendidas.
+      Não usa o preço da passagem, não usa o histórico de vendas e não desconta nada.
+      Serve para dar ordem de grandeza numa conversa — para o número real do seu recorte, veja a
+      <button class="linkish" id="eseToSim" type="button">simulação sobre os dados</button>.
+    </p>
   </section>
 
   <section id="secTop">
@@ -194,7 +241,7 @@
             <button class="tool" id="btnInvert" type="button" data-fixed aria-pressed="false"
               title="Inverter a escala: quem vende mais fica quase transparente"><svg><use href="#s-swap"/></svg>Inverter</button>
             <button class="tool" id="btnOnlyTop" type="button" data-fixed aria-pressed="false"
-              title="Destacar apenas as cinco poltronas do ranking ativo"><svg><use href="#s-star"/></svg>Só o top 5</button>
+              title="Destacar apenas as cinco poltronas do ranking ativo"><svg class="solidicon"><use href="#s-star"/></svg>Só o top 5</button>
             <button class="tool" id="btnMapCfg" type="button" data-fixed title="Ajustes do mapa de calor"><svg><use href="#s-cog"/></svg></button>
           </div>
           <div class="sensbar" id="sensBar">
@@ -238,11 +285,54 @@
         <div id="chLead"></div>
         <div class="chartkey"><em><b style="background:var(--acc)"></b>Top 5</em><em><b style="background:var(--dim);opacity:.42"></b>Todas</em></div>
       </article>
-      <article class="chart">
-        <h3>Cobertura × precocidade<button class="i" data-info="chartScatter" type="button" aria-label="Explicar">i</button></h3>
-        <p class="hint">Bolha maior = mais viagens sustentando o ponto.</p>
-        <div id="chScatter"></div>
+      <article class="chart wide">
+        <div class="chhead">
+          <div><h3>Como o ônibus enche<button class="i" data-info="chartFill" type="button" aria-label="Explicar">i</button></h3>
+            <p class="hint">Da esquerda (2 meses antes) até a partida, à direita.</p></div>
+          <div class="switch small" id="fillSwitch" role="group" aria-label="Recorte da curva">
+            <button type="button" data-fill="5" class="on">Top 5</button>
+            <button type="button" data-fill="10">Top 10</button>
+            <button type="button" data-fill="all">Todas</button>
+          </div>
+        </div>
+        <div id="chFill"></div>
+        <div class="fillfoot">
+          <button class="gh" id="fillReplay" type="button"><svg class="solidicon"><use href="#s-play"/></svg>Rever</button>
+          <div class="chartkey"><em><b style="background:var(--acc)"></b><span id="fillKeyA">Top 5</span></em><em><b style="background:var(--dim);opacity:.42"></b>Todas as poltronas</em></div>
+        </div>
       </article>
+
+      <article class="chart wide">
+        <div class="chhead">
+          <div><h3>O salão enchendo<button class="i" data-info="chartSeats" type="button" aria-label="Explicar">i</button></h3>
+            <p class="hint">A planta se preenche na ordem típica de compra, rumo à partida.</p></div>
+          <div class="switch small" id="seatFillScope" role="group" aria-label="Destaque">
+            <button type="button" data-sf="5" class="on">Top 5</button>
+            <button type="button" data-sf="10">Top 10</button>
+            <button type="button" data-sf="all">Sem destaque</button>
+          </div>
+        </div>
+        <div class="sfstage">
+          <div class="sfclock">
+            <div><span class="lbl">Momento</span><b id="sfWhen">—</b></div>
+            <div class="sfnow" id="sfNow">—</div>
+          </div>
+          <div id="sfBus" class="sfbus"></div>
+          <div class="sftrack">
+            <input id="sfRange" type="range" min="0" max="9" step="1" value="9" aria-label="Momento antes da partida">
+            <div class="sfmarks" id="sfMarks"></div>
+          </div>
+        </div>
+        <div class="fillfoot">
+          <button class="gh" id="sfPlay" type="button"><svg class="solidicon"><use href="#s-play"/></svg>Rodar de novo</button>
+          <div class="chartkey">
+            <em><b style="background:var(--acc)"></b>Já vendida</em>
+            <em><b style="background:var(--seat-empty)"></b>Ainda vazia</em>
+            <em><b class="t5"></b><span id="sfKey">Top 5</span></em>
+          </div>
+        </div>
+      </article>
+
       <article class="chart">
         <h3 id="chRankTitle">Top 10</h3>
         <p class="hint" id="chRankHint">—</p>
@@ -278,6 +368,7 @@
     <span class="made"><b>Criado por Gabriel Loiola</b></span>
     <span id="ver">v4.0</span>
   </footer>
+
 </div>
 </main>
 
@@ -285,7 +376,7 @@
 <dialog class="md" id="dlgSim" aria-labelledby="simTitle">
   <div class="mdshell">
     <div class="mdhead">
-      <div><span class="lbl" style="color:var(--acc)">Simulação de receita</span><h2 id="simTitle">Vamos simular <b>valores?</b></h2><p id="simSub">—</p></div>
+      <div><span class="lbl">Receita não cobrada</span><h2 id="simTitle">Quanto <b>ficou na mesa?</b></h2><p id="simSub">—</p></div>
       <button class="mdx" data-close="dlgSim" type="button" aria-label="Fechar"><svg><use href="#s-x"/></svg></button>
     </div>
     <div class="mdbody">
@@ -317,7 +408,7 @@
             </div>
 
             <div id="simModePct">
-              <div class="rangeval"><b id="simPctTxt">+10%</b><span>sobre o preço médio pago</span></div>
+              <div class="rangeval"><b id="simPctTxt">+10%</b><span>sobre cada bilhete já vendido</span></div>
               <input id="simPct" type="range" min="0" max="60" step="1" value="10">
               <div class="chips" style="margin-top:8px" id="simPreset">
                 <button class="chip" data-pct="5" type="button">5%</button>
@@ -343,17 +434,6 @@
               </div>
               <p class="fldhint" id="simAbsHint">—</p>
             </div>
-          </div>
-          <div class="box">
-            <span class="lbl">Cenário de demanda <button class="i" data-info="simRet" type="button" aria-label="Retenção">i</button></span>
-            <div class="rangeval"><b id="simRetTxt">100%</b><span>da demanda mantida</span></div>
-            <input id="simRet" type="range" min="50" max="100" step="1" value="100">
-            <div class="chips" style="margin-top:8px" id="simScen">
-              <button class="chip" data-ret="85" type="button">Conservador</button>
-              <button class="chip" data-ret="93" type="button">Base</button>
-              <button class="chip on" data-ret="100" type="button">Otimista</button>
-            </div>
-            <p class="scenexp" id="simScenExp">—</p>
           </div>
           <div class="box">
             <span class="lbl">Período</span>
@@ -420,6 +500,59 @@
   </div>
 </dialog>
 
+<!-- ══════ FILTROS ══════ -->
+<dialog class="md" id="dlgFilters" style="width:min(880px,calc(100% - 24px))" aria-labelledby="filTitle">
+  <div class="mdshell">
+    <div class="mdhead">
+      <div><span class="lbl">Recorte</span><h2 id="filTitle">O que entra <b>no estudo</b></h2>
+        <p id="filSub">—</p></div>
+      <button class="mdx" data-close="dlgFilters" type="button" aria-label="Fechar"><svg><use href="#s-x"/></svg></button>
+    </div>
+    <div class="mdbody">
+      <section class="filgrp">
+        <span class="lbl">Período e base</span>
+        <div class="filgrid">
+          <div class="fld"><label for="from">De</label><input id="from" type="date"></div>
+          <div class="fld"><label for="to">Até</label><input id="to" type="date"></div>
+          <div class="fld"><label for="minN">Amostra mínima <button class="i" data-info="sample" type="button" aria-label="Amostra mínima">i</button></label><input id="minN" type="number" min="1" max="9999" step="1"></div>
+          <div class="fld"><label for="layout">Planta <button class="i" data-info="layout" type="button" aria-label="Planta">i</button></label><select id="layout"></select></div>
+        </div>
+      </section>
+
+      <section class="filgrp">
+        <span class="lbl">Onde</span>
+        <div class="filgrid">
+          <div class="fld"><label for="fMarket">Mercado</label><select id="fMarket"></select></div>
+          <div class="fld"><label for="fLine">Linha</label><select id="fLine"></select></div>
+          <div class="fld"><label for="fOrigin">Origem</label><select id="fOrigin"></select></div>
+          <div class="fld"><label for="fDest">Destino</label><select id="fDest"></select></div>
+          <div class="fld"><label for="fRoute">Trecho (origem → destino)</label><select id="fRoute"></select></div>
+        </div>
+      </section>
+
+      <section class="filgrp">
+        <span class="lbl">Operação e venda</span>
+        <div class="filgrid">
+          <div class="fld"><label for="fService">Serviço</label><select id="fService"></select></div>
+          <div class="fld"><label for="fClass">Classe</label><select id="fClass"></select></div>
+          <div class="fld"><label for="fChannel">Canal de venda</label><select id="fChannel"></select></div>
+          <div class="fld"><label for="fWeek">Dia da semana</label><select id="fWeek"></select></div>
+          <div class="fld"><label for="fOcc">Ocupação mínima da viagem</label><select id="fOcc"></select></div>
+          <div class="fld"><label for="fLead">Janela de antecedência</label><select id="fLead"></select></div>
+        </div>
+      </section>
+    </div>
+    <div class="mdfoot">
+      <button class="gh" id="btnClear" type="button">Limpar filtros</button>
+      <button class="gh solid" id="btnApply" type="button">Ver resultado</button>
+    </div>
+  </div>
+</dialog>
+
+<button id="fab" class="dash" type="button" hidden aria-label="Filtrar o estudo" title="Filtrar o estudo">
+  <svg class="solidicon"><use href="#s-filter"/></svg><span>Filtros</span><i id="fabCount" hidden>0</i>
+</button>
+
 <!-- ══════ AJUSTES ══════ -->
 <dialog class="md drawer" id="dlgCfg" aria-labelledby="cfgTitle">
   <div class="mdshell">
@@ -479,14 +612,20 @@
         </section>
 
         <section class="cfgbox">
+          <span class="lbl">Receita</span>
+          <div class="cfgrow">
+            <div><b>Contar revendas</b>
+              <small>Desligado (padrão), vale só a primeira compra de cada poltrona por viagem. Ligado, soma tudo o que foi cobrado, inclusive quando a poltrona foi vendida de novo — é a visão de caixa. A ordem e a antecedência seguem vindo da primeira compra nos dois casos.</small></div>
+            <button class="tog" id="cfgResale" type="button" role="switch" aria-pressed="false" aria-label="Contar revendas"></button>
+          </div>
+          <p class="cfghint" id="cfgResaleHint">—</p>
+        </section>
+
+        <section class="cfgbox">
           <span class="lbl">Interface</span>
           <div class="cfgrow">
             <div><b>Tema claro</b></div>
             <button class="tog" id="cfgLight" type="button" role="switch" aria-pressed="false" aria-label="Tema claro"></button>
-          </div>
-          <div class="cfgrow">
-            <div><b>Tingir com a paleta</b><small>Fora daqui, o site é preto, branco e grafite.</small></div>
-            <button class="tog" id="cfgTint" type="button" role="switch" aria-pressed="false" aria-label="Tingir a interface"></button>
           </div>
           <div class="cfgrow">
             <div><b>Brilho de fundo</b></div>
