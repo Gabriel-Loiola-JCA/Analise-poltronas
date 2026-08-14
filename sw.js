@@ -4,7 +4,7 @@
    Suba a versão do cache a cada deploy — o SW limpa os antigos
    sozinho no evento activate.
    ══════════════════════════════════════════════════════════════ */
-const VERSION = 'v5.10.0';
+const VERSION = 'v5.14.0';
 const CACHE = `poltronas-${VERSION}`;
 const ASSETS = [
   './',
@@ -12,7 +12,9 @@ const ASSETS = [
   './assets/css/app.css',
   './assets/js/engine.js',
   './assets/js/app.js',
-  './manifest.webmanifest'
+  './manifest.webmanifest',
+  './favicon-preto.png',
+  './favicon-branco.png'
 ];
 
 self.addEventListener('install', e => {

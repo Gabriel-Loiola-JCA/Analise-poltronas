@@ -188,7 +188,7 @@ function reader(delim, onRow) {
 
 function blankQuality() {
   return { rawRows: 0, valid: 0, dup: 0, badSeat: 0, codeSeat: 0, noTrip: 0, noSaleTime: 0,
-    afterDeparture: 0, cancelled: 0, malformed: 0, coarse: 0, noRevenue: 0 };
+    afterDeparture: 0, cancelled: 0, malformed: 0, coarse: 0, noRevenue: 0, assumedDeparture: 0 };
 }
 const bump = (o, k) => { if (k) o[k] = (o[k] || 0) + 1; };
 
@@ -216,7 +216,25 @@ function accumulator(headers, sourceName) {
     const tDate = parseDate(cell(r, M.tripDate));
     const trip = stamp(cell(r, M.tripDate), cell(r, M.tripTime), true);
     if (!trip && !tripId) { q.noTrip++; return; }
-    if (trip && sale.ms > trip.ms) { q.afterDeparture++; return; }
+
+    /* HORA DE PARTIDA REAL OU PRESUMIDA
+       Sem coluna de hora da viagem, "Data Viagem" chega como
+       2026-01-26 00:00:00 e a partida vira meia-noite. Comparar o
+       instante da venda com essa meia-noite reprovaria toda venda
+       feita no próprio dia do embarque — que é justamente o pico do
+       balcão. Num arquivo real isso descartou 37% das linhas.
+
+       Quando a hora da partida é presumida, a comparação passa a
+       ser por DATA: só sai o que foi vendido depois do dia da
+       viagem. A antecedência desses casos fica em 0 dia, que é o
+       que de fato se sabe. */
+    const horaPartidaReal = M.tripTime >= 0 && !!parseTime(cell(r, M.tripTime));
+    if (trip) {
+      if (horaPartidaReal) {
+        if (sale.ms > trip.ms) { q.afterDeparture++; return; }
+      } else if (tDate && sale.iso > tDate.iso) { q.afterDeparture++; return; }
+    }
+    if (!horaPartidaReal && trip) q.assumedDeparture++;
     if (sale.coarse) q.coarse++;
     seatCount[seat] = (seatCount[seat] || 0) + 1;
 
@@ -252,7 +270,15 @@ function accumulator(headers, sourceName) {
     let S = T.seats.get(seat);
     if (!S) { S = { seat, ev: new Map() }; T.seats.set(seat, S); }
     if (S.ev.has(id)) { q.dup++; return; }
-    S.ev.set(id, { i: id, m: sale.ms, r: rev, p: pr, c: ch, l: trip ? Math.max(0, (trip.ms - sale.ms) / DAY) : null });
+    /* Com hora de partida real, a antecedência é a distância exata.
+       Com hora presumida, medir em horas subestimaria em até um dia
+       (venda às 22h da véspera contra meia-noite = 0,08 dia, quando
+       o que se sabe é "um dia antes"). Nesse caso conta-se em dias
+       de calendário, que é a informação que o arquivo tem. */
+    const lead = !trip ? null
+      : horaPartidaReal ? Math.max(0, (trip.ms - sale.ms) / DAY)
+        : (tDate ? Math.max(0, Math.round((Date.parse(tDate.iso) - Date.parse(sale.iso)) / DAY)) : null);
+    S.ev.set(id, { i: id, m: sale.ms, r: rev, p: pr, c: ch, l: lead });
     q.valid++;
   }
 

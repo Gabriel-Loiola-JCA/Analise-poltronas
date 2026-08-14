@@ -597,10 +597,10 @@ function run(reset) {
      em vez de um piscar de uma tela para outra. */
   if ($('#dash').hidden) {
     $('#dash').classList.add('fading');
-    $('#enter').hidden = true; $('#dash').hidden = false;
+    $('#home').hidden = true; $('#dash').hidden = false;
     requestAnimationFrame(() => requestAnimationFrame(() => $('#dash').classList.remove('fading')));
   } else {
-    $('#enter').hidden = true; $('#dash').hidden = false;
+    $('#home').hidden = true; $('#dash').hidden = false;
   }
   $('#resume').hidden = true;
   syncActions();
@@ -661,7 +661,7 @@ function activeList() {
 /* ── render ─────────────────────────────────────────── */
 function renderAll() {
   renderActiveFilters();
-  renderSource(); renderOrderWarn(); renderNarrative(); renderKpis(); renderAdvice(); renderPodium();
+  renderSource(); renderOrderWarn(); renderNarrative(); renderKpis(); renderAdvice(); renderEse(); renderPodium();
   renderMap(); drawCharts(); renderTable(); renderMethod(); renderQuality(); reveal();
 }
 function renderSource() {
@@ -673,30 +673,34 @@ function renderSource() {
   $('#deckBadge').textContent = S.LAYOUTS[a.layout].badge;
 }
 /* ══════════════════════════════════════════════════════════════
-   AVISO DE GRANULARIDADE
-   Muitos sistemas gravam a hora da venda sem os minutos. Quando isso
-   acontece, todas as compras da mesma hora chegam empatadas e a
-   ordem entre elas é desconhecida — o ranking "vende primeiro"
-   perde base na mesma proporção.
+   GRANULARIDADE DA HORA
+   O sistema de origem exporta a venda com a hora cheia, sem minutos
+   — em todos os arquivos vistos até aqui, 100% dos registros. Isso
+   não é defeito de um arquivo: é o formato. Um aviso permanente no
+   topo seria ruído, porque alerta que nunca desliga ninguém lê.
 
-   Não mexemos no cálculo: rank médio para empatados e crédito de
-   primeira rateado já é o tratamento estatístico correto. O que
-   faltava era dizer ao usuário quanto da ordem sobrou.
+   A ressalva vale mesmo assim, mas só num lugar: quando o usuário
+   escolhe justamente o ranking que depende da ordem. Nos outros
+   dois — antecedência e volume — a hora cheia não atrapalha nada,
+   porque a distância até a partida é medida em dias.
+
+   O cálculo não muda: rank médio para empatados e crédito de
+   primeira rateado é o tratamento correto e não há como recuperar
+   uma ordem que o banco não gravou.
    ══════════════════════════════════════════════════════════════ */
 function renderOrderWarn() {
   const a = st.an, s = a.summary, q = a.quality || {};
-  const el = $('#orderWarn'); if (!el) return;
+  const el = $('#rankNote'); if (!el) return;
   const mantida = s.orderKept == null ? 1 : s.orderKept;
   const horaCheia = q.valid ? (q.coarse || 0) / q.valid : 0;
-  /* só avisa quando a perda é material */
-  if (mantida > .9 || horaCheia < .5) { el.hidden = true; return; }
+  /* aparece só no ranking que depende da ordem, e só se a perda for material */
+  if (st.rank !== 'first' || mantida > .92 || horaCheia < .5) { el.hidden = true; return; }
   el.hidden = false;
-  $('#orderWarnTxt').innerHTML =
-    `${pct(horaCheia, 0)} das vendas têm horário gravado só na hora cheia, sem minutos. `
-    + `Compras da mesma hora chegam empatadas: <b>${int(s.tiedSeats)}</b> de ${int(s.rankedSeats)} poltronas ficaram sem ordem definida, `
-    + `e <b>${pct(1 - mantida, 0)}</b> da informação de ordem se perdeu. `
-    + `Os empates são rateados — ninguém leva crédito de primeira sozinho —, mas prefira <b>Maior antecedência</b> para decidir: `
-    + `ela é medida em dias e não depende do minuto da compra.`;
+  $('span', el).innerHTML =
+    `O arquivo grava a venda na hora cheia, sem minutos, então compras da mesma hora chegam empatadas: `
+    + `<b>${int(s.tiedSeats)}</b> de ${int(s.rankedSeats)} poltronas sem ordem definida, `
+    + `<b>${pct(1 - mantida, 0)}</b> da ordem indeterminada. Os empates são rateados. `
+    + `Para decidir preço, <b>Maior antecedência</b> é mais firme — é medida em dias.`;
 }
 function renderNarrative() {
   const a = st.an, p = a.period, c = a.champFirst, l = a.leadTop, m = a.mostSold;
@@ -797,6 +801,80 @@ function renderAdvice() {
   adv.last = { seats, absSug, pctSug };
 }
 
+/* ══════════════════════════════════════════════════════════════
+   CONTA DE PADEIRO
+   Aritmética crua de propósito: aumento × poltronas × dias, com um
+   serviço por dia. Não entra o preço da passagem, não entra o
+   histórico, não desconta nada.
+
+   Ela existe porque a simulação sobre os dados responde "quanto
+   isso rendeu no recorte", e numa conversa a primeira pergunta
+   costuma ser outra: "e se eu subir dois reais, dá quanto no ano?".
+   As duas convivem, desde que ninguém confunda uma com a outra —
+   por isso vive em seção separada e com o método escrito na tela.
+   ══════════════════════════════════════════════════════════════ */
+const ese = { valor: 5, qtd: 5 };
+const ESE_PRONTOS = [
+  { v: 2, q: 10 }, { v: 5, q: 5 }, { v: 5, q: 10 }, { v: 10, q: 5 }, { v: 20, q: 3 }
+];
+function eseQtdReal() {
+  if (ese.qtd !== 'full') return Number(ese.qtd);
+  const L = st.an && S.LAYOUTS[st.an.layout];
+  return L ? Object.keys(L.map).length : 46;
+}
+function eseCalc(v, q) {
+  const dia = v * q;
+  return { dia, mes: dia * 30, semestre: dia * 182, ano: dia * 365 };
+}
+function renderEse() {
+  if (!st.an) return;
+  const q = eseQtdReal(), v = ese.valor;
+  const r = eseCalc(v, q);
+  /* "em" + "as" = "nas": sem isto sai "em as 46 poltronas" */
+  const comoQtd = ese.qtd === 'full'
+    ? `nas <b>${int(q)} poltronas</b> do veículo`
+    : `em <b>${int(q)} poltronas</b>`;
+
+  $('#eseFrase').innerHTML =
+    `Subindo <b>${brl0(v)}</b> ${comoQtd}, com um serviço por dia, entram `
+    + `<span class="big">${brl0(r.dia)}</span> a mais por dia — `
+    + `<span class="big">${brl0(r.mes)}</span> em um mês e <span class="big">${brl0(r.ano)}</span> em um ano.`;
+
+  $('#eseNums').innerHTML = [
+    ['Por dia', brl0(r.dia), 0],
+    ['Em 1 mês', brl0(r.mes), 0],
+    ['Em 6 meses', brl0(r.semestre), 0],
+    ['Em 1 ano', brl0(r.ano), 1]
+  ].map(([k, val, hi]) => `<div${hi ? ' class="hi"' : ''}><small>${esc(k)}</small><b>${val}</b></div>`).join('');
+
+  $('#eseCalc').innerHTML =
+    `<b>${brl0(v)}</b> × <b>${int(q)}</b> poltronas = ${brl0(r.dia)} por serviço &nbsp;·&nbsp; `
+    + `× <b>365</b> dias = <b>${brl0(r.ano)}</b> no ano`;
+
+  $$('#eseVal .chip').forEach(b => b.classList.toggle('on', Number(b.dataset.v) === ese.valor));
+  $$('#eseQtd .chip').forEach(b => b.classList.toggle('on', String(b.dataset.q) === String(ese.qtd)));
+
+  $('#eseGrid').innerHTML = ESE_PRONTOS.map(p => {
+    const c = eseCalc(p.v, p.q);
+    const on = p.v === ese.valor && String(p.q) === String(ese.qtd);
+    return `<button class="esecard${on ? ' on' : ''}" type="button" data-v="${p.v}" data-q="${p.q}">
+      <i>${brl0(p.v)} em ${p.q} poltronas</i><b>${brl0(c.ano)}</b><span>por ano</span></button>`;
+  }).join('');
+}
+$('#eseVal').addEventListener('click', e => {
+  const b = e.target.closest('[data-v]'); if (!b) return;
+  ese.valor = Number(b.dataset.v); renderEse();
+});
+$('#eseQtd').addEventListener('click', e => {
+  const b = e.target.closest('[data-q]'); if (!b) return;
+  ese.qtd = b.dataset.q === 'full' ? 'full' : Number(b.dataset.q); renderEse();
+});
+$('#eseGrid').addEventListener('click', e => {
+  const b = e.target.closest('[data-v]'); if (!b) return;
+  ese.valor = Number(b.dataset.v); ese.qtd = Number(b.dataset.q); renderEse();
+});
+$('#eseToSim').addEventListener('click', () => openSim({ mode: 'abs', abs: ese.valor, scope: '5' }));
+
 function renderPodium() {
   const a = st.an, mode = st.rank, top = activeTop();
   $$('#rankSwitch button').forEach(b => { const on = b.dataset.rank === mode; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
@@ -809,6 +887,9 @@ function renderPodium() {
   $('#chRankTitle').textContent = { advance: 'Top 10 · antecedência média', first: 'Top 10 · precocidade', volume: 'Top 10 · volume' }[mode];
   $('#chRankHint').textContent = { advance: 'Barra proporcional aos dias antes da partida.', first: 'Barra proporcional a 1 − percentil médio.', volume: 'Barra proporcional às viagens com venda.' }[mode];
   $('#legTop5').textContent = T[0];
+  /* data-n ajusta a grade ao número de colocados, para não sobrar
+     coluna vazia quando o recorte é estreito */
+  $('#podium').dataset.n = top.length;
   if (!top.length) { $('#podium').innerHTML = '<div class="pod"><p style="color:var(--muted);font-size:12px">Nenhuma poltrona atingiu a amostra mínima. Reduza o corte ou amplie o período.</p></div>'; return; }
   const best = mode === 'advance' ? Math.max(...top.map(s => s.avgLead || 0)) : mode === 'volume' ? Math.max(...top.map(s => s.appear || 0)) : 1;
   $('#podium').innerHTML = top.map((s, i) => {
@@ -1304,7 +1385,8 @@ function renderMethod() {
         ['…e a nossa foi a 3ª a sair', 'rank 3'],
         ['Conta', '(3 − 1) ÷ (10 − 1)']],
         ['Percentil naquela viagem', '22,2%'])}
-      <p class="exnote">Isso é feito viagem a viagem; o número da tabela é a média desses percentuais.${f ? ` A poltrona ${f.seat}, por exemplo, tem rank médio ${num(f.avgRank, 2)} em ${int(f.appear)} ${pl(f.appear, 'viagem', 'viagens')} e percentil médio ${pct(f.avgPct, 1)}.` : ''} Quanto menor, mais cedo ela sai na fila.</p>`],
+      <p class="exnote">Isso é feito viagem a viagem; o número da tabela é a média desses percentuais.${f ? ` A poltrona ${f.seat}, por exemplo, tem rank médio ${num(f.avgRank, 2)} em ${int(f.appear)} ${pl(f.appear, 'viagem', 'viagens')} e percentil médio ${pct(f.avgPct, 1)}.` : ''} Quanto menor, mais cedo ela sai na fila.</p>
+      ${(a.quality && a.quality.valid && (a.quality.coarse || 0) / a.quality.valid > .5) ? `<p class="exnote"><b>Limite conhecido:</b> o sistema de origem grava a venda na hora cheia, sem minutos — há 24 horários possíveis por dia. Compras da mesma hora chegam empatadas e recebem o rank médio, com o crédito de primeira rateado. Neste recorte, ${pct(1 - (a.summary.orderKept == null ? 1 : a.summary.orderKept), 0)} da ordem fica indeterminada. Não há como recuperá-la: por isso a antecedência, medida em dias, é a base mais firme para decidir preço.</p>` : ''}`],
 
     ['03', 'Antecedência',
       `<p>Dias entre a primeira compra e a partida. Média e mediana andam juntas porque uma compra feita com seis meses de folga puxa a média sozinha.</p>
@@ -1374,7 +1456,8 @@ function renderQuality() {
   const n = [];
   if (q.coarse / Math.max(1, q.valid) > .8) n.push('Mais de 80% das vendas têm horário de hora cheia: empates são esperados e foram rateados.');
   if (q.offLayout) n.push(`${int(q.offLayout)} ocorrências citam poltronas fora da planta “${S.LAYOUTS[a.layout].badge}”. Se o número for alto, troque a planta.`);
-  if (q.afterDeparture) n.push(`${int(q.afterDeparture)} vendas após o horário de partida foram isoladas.`);
+  if (q.assumedDeparture) n.push(`O arquivo não traz hora da partida, só a data. A antecedência é contada em dias de calendário e as vendas do próprio dia do embarque entram com 0 dia — não são descartadas.`);
+  if (q.afterDeparture) n.push(`${int(q.afterDeparture)} ${pl(q.afterDeparture, 'venda foi isolada', 'vendas foram isoladas')} por ${q.assumedDeparture ? 'terem data posterior à da viagem' : 'serem posteriores ao horário de partida'}.`);
   if (a.summary.singles) n.push(`${int(a.summary.singles)} viagens com uma única poltrona vendida entram no volume, mas não no percentil.`);
   if (a.summary.droppedTrips) n.push(`${int(a.summary.droppedTrips)} viagens ficaram fora pelo filtro de ocupação mínima.`);
   if (a.period.depMissing) n.push(`${int(a.period.depMissing)} viagens sem hora de partida não entram na antecedência.`);
@@ -1666,7 +1749,7 @@ async function openStudy(id) {
   });
   st.an = an; st.layout = s.layout; st.ds = st.ds || null;
   $('#dlgHist').close();
-  $('#enter').hidden = true; $('#dash').hidden = false;
+  $('#home').hidden = true; $('#dash').hidden = false;
   $('#resume').hidden = true;
   saveCtx.id = rec.id; saveCtx.auto = false; invalidateSim();
   syncActions();
@@ -1801,6 +1884,7 @@ $('#rankSwitch').addEventListener('click', e => {
   const b = e.target.closest('[data-rank]'); if (!b || b.dataset.rank === st.rank) return;
   st.rank = b.dataset.rank; DB.setPref('rank', st.rank);
   const t = activeTop(); if (t[0]) st.seat = t[0].seat;
+  renderOrderWarn();
   renderPodium(); paintSeats(); drawCharts();
 });
 $('#metricSwitch').addEventListener('click', e => {
@@ -1912,7 +1996,7 @@ function exportPdf() {
 $('#btnReset').addEventListener('click', () => {
   st.ds = st.an = null; st.layout = ''; st.layoutManual = false; st.sim = null;
   saveCtx.id = null; saveCtx.auto = false; invalidateSim();
-  $('#dash').hidden = true; $('#enter').hidden = false;
+  $('#dash').hidden = true; $('#home').hidden = false;
   $('#advice').hidden = true; $('#resume').hidden = true;
   syncActions();
   document.title = 'Estudo de Poltronas'; $('#file').value = '';

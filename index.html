@@ -10,6 +10,8 @@
 <link rel="icon" type="image/png" href="./favicon-preto.png" media="(prefers-color-scheme: light)">
 <link rel="icon" type="image/png" href="./favicon-branco.png" media="(prefers-color-scheme: dark)">
 <title>Estudo de Poltronas</title>
+<link rel="icon" type="image/png" href="./favicon-preto.png" media="(prefers-color-scheme: light)">
+<link rel="icon" type="image/png" href="./favicon-branco.png" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="preload" href="./assets/css/app.css" as="style">
 <link rel="stylesheet" href="./assets/css/app.css">
@@ -68,7 +70,7 @@
 </header>
 
 <main>
-<div class="wrap">
+<div class="wrap" id="home">
 <section class="enter" id="enter">
   <div>
     <span class="lbl">Inteligência comercial · precificação por evidência</span>
@@ -145,10 +147,7 @@
         <button type="button" data-rank="volume" role="tab" aria-selected="false">Mais vendidas</button>
       </div>
     </div>
-    <div class="warn rv" id="orderWarn" hidden>
-      <svg><use href="#s-clock"/></svg>
-      <div><b>A ordem de compra deste arquivo é parcial</b><span id="orderWarnTxt">—</span></div>
-    </div>
+    <p class="ranknote" id="rankNote" hidden><svg><use href="#s-clock"/></svg><span></span></p>
     <article class="narr rv"><span class="mk">i</span><div><small>Leitura principal</small><p id="narr">—</p><p class="sub" id="narrSub"></p></div></article>
     <div class="kpis rv" id="kpis"></div>
     <article class="advice rv" id="advice" hidden>
@@ -165,6 +164,52 @@
         <small id="adviceCaveat">—</small>
       </div>
     </article>
+  </section>
+
+  <section id="secEse">
+    <div class="shead">
+      <div><span class="lbl">Conta de padeiro</span><h2>E se você <b>subisse o preço?</b></h2>
+        <p>Só o aumento entra na conta, sem o preço da passagem. Um serviço por dia, todo dia.</p></div>
+    </div>
+
+    <div class="ese rv">
+      <div class="esectl">
+        <div class="esefld">
+          <span class="lbl">Aumento por poltrona</span>
+          <div class="chips" id="eseVal">
+            <button class="chip" data-v="1" type="button">R$ 1</button>
+            <button class="chip" data-v="2" type="button">R$ 2</button>
+            <button class="chip on" data-v="5" type="button">R$ 5</button>
+            <button class="chip" data-v="10" type="button">R$ 10</button>
+            <button class="chip" data-v="20" type="button">R$ 20</button>
+          </div>
+        </div>
+        <div class="esefld">
+          <span class="lbl">Em quantas poltronas</span>
+          <div class="chips" id="eseQtd">
+            <button class="chip" data-q="3" type="button">3</button>
+            <button class="chip on" data-q="5" type="button">5</button>
+            <button class="chip" data-q="10" type="button">10</button>
+            <button class="chip" data-q="20" type="button">20</button>
+            <button class="chip" data-q="full" type="button">o ônibus todo</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="esefrase" id="eseFrase">—</p>
+      <div class="esenums" id="eseNums"></div>
+      <p class="esecalc" id="eseCalc">—</p>
+    </div>
+
+    <div class="esegrid rv" id="eseGrid"></div>
+
+    <p class="esenote">
+      Esta conta é de propósito a mais simples possível: <b>valor do aumento × poltronas × dias</b>.
+      Ela supõe <b>um serviço por dia</b>, todos os dias do período, com todas essas poltronas vendidas.
+      Não usa o preço da passagem, não usa o histórico de vendas e não desconta nada.
+      Serve para dar ordem de grandeza numa conversa — para o número do seu recorte real, veja a
+      <button class="linkish" id="eseToSim" type="button">simulação sobre os dados</button>.
+    </p>
   </section>
 
   <section id="secTop">
@@ -239,7 +284,7 @@
         <div id="chLead"></div>
         <div class="chartkey"><em><b style="background:var(--acc)"></b>Top 5</em><em><b style="background:var(--dim);opacity:.42"></b>Todas</em></div>
       </article>
-      <article class="chart wide">
+      <article class="chart">
         <div class="chhead">
           <div><h3>Como o ônibus enche<button class="i" data-info="chartFill" type="button" aria-label="Explicar">i</button></h3>
             <p class="hint">Da esquerda (2 meses antes) até a partida, à direita.</p></div>

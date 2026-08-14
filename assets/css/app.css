@@ -282,7 +282,7 @@ main{position:relative;z-index:1}
 #dlgFilters .mdfoot{justify-content:space-between}
 
 /* ── seções ─────────────────────────────────────────── */
-section{padding:64px 0 0;position:relative;scroll-margin-top:124px}
+section{padding:64px 0 0;position:relative;scroll-margin-top:74px}
 .shead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px;flex-wrap:wrap}
 .shead h2{font-size:clamp(21px,2.3vw,31px);font-weight:300;letter-spacing:-.045em}
 .shead h2 b{font-weight:800}
@@ -299,15 +299,55 @@ section{padding:64px 0 0;position:relative;scroll-margin-top:124px}
 .narr p b{font-weight:800}
 .narr .sub{margin-top:6px;font-size:11.5px;color:var(--muted);font-weight:400;letter-spacing:0;line-height:1.5}
 
-/* aviso de limite metodológico — âmbar, não vermelho: é ressalva, não erro */
-.warn{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;margin-bottom:10px;
-  padding:14px 16px;border:1px solid var(--warn);border-radius:var(--r);
-  background:color-mix(in srgb,var(--warn) 8%,var(--panel))}
-.warn[hidden]{display:none}
-.warn svg{width:17px;height:17px;color:var(--warn);margin-top:1px}
-.warn b{display:block;font-size:12px;color:var(--text);margin-bottom:3px}
-.warn span{display:block;color:var(--muted);font-size:11px;line-height:1.55}
-.warn span b{display:inline;margin:0}
+/* Ressalva metodológica ligada ao ranking de ordem. Sem moldura nem
+   cor de alerta: é uma nota de rodapé, não um problema a resolver —
+   a hora cheia é o formato do sistema de origem, não um defeito
+   deste arquivo. */
+.ranknote{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:start;
+  margin:0 0 10px;padding:0;color:var(--dim);font-size:10.5px;line-height:1.55;max-width:96ch}
+.ranknote[hidden]{display:none}
+.ranknote svg{width:13px;height:13px;color:var(--warn);margin-top:2px;flex:0 0 auto}
+.ranknote b{color:var(--muted);font-weight:700}
+
+/* ══════════════════════════════════════════════════════════════
+   CONTA DE PADEIRO
+   Aritmética deliberadamente crua — aumento × poltronas × dias.
+   Fica separada da simulação sobre dados justamente para que
+   ninguém confunda ordem de grandeza com resultado medido.
+   ══════════════════════════════════════════════════════════════ */
+.ese{margin-top:12px;padding:20px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel)}
+.esectl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px;
+  padding-bottom:16px;border-bottom:1px solid var(--line-2)}
+.esefld>.lbl{display:block;margin-bottom:8px}
+.esefrase{margin:16px 0 0;font-size:clamp(14px,1.35vw,19px);font-weight:300;letter-spacing:-.02em;
+  line-height:1.45;max-width:80ch}
+.esefrase b{font-weight:800}
+.esefrase .big{color:var(--acc);font-weight:800}
+.esenums{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,124px),1fr));gap:8px;margin-top:16px}
+.esenums div{padding:12px 13px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--panel-2);min-width:0}
+.esenums small{display:block;color:var(--dim);font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.esenums b{display:block;margin-top:5px;font-size:16px;font-weight:800;letter-spacing:-.04em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.esenums div.hi{border-color:var(--acc)}
+.esenums div.hi b{color:var(--acc)}
+.esecalc{margin:14px 0 0;padding:10px 12px;border-radius:var(--r-sm);background:var(--bg);
+  border:1px solid var(--line-2);color:var(--muted);font-family:var(--mono);font-size:11px;
+  overflow-wrap:anywhere}
+.esecalc b{color:var(--text)}
+
+/* combinações prontas, para ler sem mexer em nada */
+.esegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:10px;margin-top:12px}
+.esecard{padding:14px 15px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--panel);
+  cursor:pointer;text-align:left;font:inherit;color:inherit;
+  transition:border-color .2s var(--ease),background .2s var(--ease)}
+.esecard:hover{border-color:var(--line-3);background:var(--panel-2)}
+.esecard.on{border-color:var(--acc)}
+.esecard i{display:block;font-style:normal;color:var(--dim);font-size:10.5px;font-weight:600}
+.esecard b{display:block;margin-top:6px;font-size:17px;font-weight:800;letter-spacing:-.04em}
+.esecard span{display:block;margin-top:2px;color:var(--dim);font-size:9px;letter-spacing:.1em;text-transform:uppercase}
+.esenote{margin:14px 0 0;color:var(--dim);font-size:11px;line-height:1.6;max-width:92ch}
+.esenote b{color:var(--muted)}
+.esenote .linkish{display:inline;margin:0;padding:0;font-size:11px}
 
 /* ══════════════════════════════════════════════════════════════
    RECOMENDAÇÃO · leitura em linguagem de gente
@@ -366,7 +406,14 @@ h2 .i,h3 .i{vertical-align:middle;margin-left:5px}
 .switch button.on{background:var(--acc);color:var(--acc-ink)}
 
 /* ── pódio top 5 ────────────────────────────────────── */
+/* O pódio só usa as cinco colunas quando há cinco colocados. Com
+   amostra mínima alta e recorte estreito sobra um card só, e a
+   grade fixa deixava quatro colunas vazias ao lado dele. */
 .podium{display:grid;grid-template-columns:minmax(0,1.35fr) repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.podium[data-n="0"],.podium[data-n="1"]{grid-template-columns:minmax(0,1fr)}
+.podium[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.podium[data-n="3"]{grid-template-columns:minmax(0,1.2fr) repeat(2,minmax(0,1fr))}
+.podium[data-n="4"]{grid-template-columns:minmax(0,1.25fr) repeat(3,minmax(0,1fr))}
 .pod{position:relative;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r);
   padding:15px 15px 14px;min-width:0;overflow:hidden;display:flex;flex-direction:column;
   transition:background .2s var(--ease),border-color .2s var(--ease)}
@@ -554,9 +601,22 @@ h2 .i,h3 .i{vertical-align:middle;margin-left:5px}
    A linha se desenha da esquerda para a direita, no mesmo sentido
    em que o tempo corre rumo à partida.
    ══════════════════════════════════════════════════════════════ */
+/* Cartões largos só onde a largura é necessária — a planta do
+   veículo. Um SVG com proporção fixa e width:100% cresce em altura
+   junto com a largura: numa coluna de 950px o gráfico ia a 432px de
+   altura, o dobro dos vizinhos. O teto de altura resolve. */
 .chart.wide{grid-column:1/-1}
+.chart svg:not(.solidicon){max-height:340px}
+.chart.wide svg:not(.solidicon){max-height:none}
 .chhead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px}
 .chhead .hint{margin-bottom:0}
+/* cabeçalho empilha quando a coluna é estreita, para o switch não
+   espremer o título */
+@media (max-width:1180px){
+  .chhead{flex-direction:column;gap:10px}
+  .chhead .switch.small{width:100%}
+  .chhead .switch.small button{flex:1}
+}
 .switch.small{padding:3px}
 .switch.small button{min-height:27px;padding:0 12px;font-size:10.5px}
 .fillfoot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:10px}
@@ -590,7 +650,9 @@ h2 .i,h3 .i{vertical-align:middle;margin-left:5px}
 /* ══════════════════════════════════════════════════════════════
    O SALÃO ENCHENDO
    ══════════════════════════════════════════════════════════════ */
-.sfstage{display:grid;gap:14px}
+/* a planta não precisa de 950px: acima disso as poltronas incham e
+   o desenho perde a proporção de um ônibus */
+.sfstage{display:grid;gap:14px;width:100%;max-width:780px;margin:0 auto}
 .sfclock{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .sfclock b{display:block;margin-top:3px;font-size:clamp(17px,1.7vw,23px);font-weight:800;letter-spacing:-.04em}
 .sfnow{color:var(--muted);font-size:11.5px;text-align:right}
@@ -641,7 +703,10 @@ h2 .i,h3 .i{vertical-align:middle;margin-left:5px}
 .tbl{border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--sh-1);background:var(--panel);margin-top:14px}
 .tbl .head,.tbl .row{display:grid;grid-template-columns:minmax(50px,.5fr) minmax(104px,1.2fr) repeat(6,minmax(0,.8fr));
   align-items:center;gap:9px;padding:0 clamp(11px,1.5vw,20px)}
-.tbl .head{min-height:40px;position:sticky;top:124px;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);
+/* 58px = altura do cabeçalho fixo. Era 124px por causa do deck de
+   filtros, que virou modal — sem o ajuste o cabeçalho da tabela
+   passava por baixo da barra do site ao rolar. */
+.tbl .head{min-height:40px;position:sticky;top:58px;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);
   border-radius:var(--r-lg) var(--r-lg) 0 0;color:var(--dim);font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
 .tbl .head span{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:3px}
 .tbl .head span:hover{color:var(--text)}
@@ -849,8 +914,11 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acc)
 /* o painel também nasce por transparência, em vez de aparecer pronto */
 #dash{transition:opacity .55s var(--ease)}
 #dash.fading{opacity:0}
-#enter{transition:opacity .35s var(--ease)}
-#enter.fading{opacity:0}
+/* a entrada e a amostra vivem no mesmo container: escondê-las juntas
+   evita que o "O que sai daqui" sobre no topo do painel */
+#home{transition:opacity .35s var(--ease)}
+#home.fading{opacity:0}
+#home[hidden]{display:none}
 .load .ring{width:58px;height:58px;border:1px solid var(--line);border-radius:50%;position:relative}
 .load .ring::before{content:"";position:absolute;inset:-1px;border:2px solid transparent;border-top-color:var(--acc);
   border-radius:50%;animation:spin 1.1s linear infinite}
@@ -871,13 +939,15 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acc)
 
 .hactions .short{display:none}
 @media (max-width:1240px){
-  .podium{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .pod.first{grid-column:span 3}
+  /* duas colunas, não três: com 4 cards depois do líder, três
+     colunas deixavam um órfão sozinho na última linha */
+  .podium,.podium[data-n]{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .podium[data-n="0"],.podium[data-n="1"]{grid-template-columns:minmax(0,1fr)}
+  .pod.first{grid-column:span 2}
   .mapwrap{grid-template-columns:1fr}
   .simgrid{grid-template-columns:1fr}
   .tbl .head,.tbl .row{grid-template-columns:minmax(46px,.5fr) minmax(96px,1.2fr) repeat(4,minmax(0,.8fr))}
   .tbl .head>:nth-child(n+7),.tbl .row>:nth-child(n+7){display:none}
-  .tbl .head{top:0}
   .hrow{grid-template-columns:minmax(0,1.6fr) repeat(2,minmax(0,.9fr)) auto}
   .hrow>:nth-child(4),.hrow>:nth-child(5){display:none}
 }
